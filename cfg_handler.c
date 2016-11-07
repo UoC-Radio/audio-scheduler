@@ -377,8 +377,11 @@ static struct day_schedule*
 cfg_get_day_schedule(xmlDocPtr config, xmlNodePtr ds_node)
 {
 	struct day_schedule *ds = NULL;
+	struct zone *tmp_zn0 = NULL;
+	struct zone *tmp_zn1 = NULL;
 	xmlNodePtr element = NULL;
 	int num_elements = 0;
+	int ret = 0;
 
 	if(parser_failed)
 		return NULL;
@@ -404,6 +407,29 @@ cfg_get_day_schedule(xmlDocPtr config, xmlNodePtr ds_node)
 				goto cleanup;
 			}
 			ds->zones[ds->num_zones - 1] = cfg_get_zone(config,element);
+			if(!ds->zones[ds->num_zones - 1])
+				goto cleanup;
+
+			/* Demand that zones are stored in ascending order
+			 * based on their start time. We do this to keep
+			 * the lookup code simple and efficient. */
+			if(ds->num_zones > 1) {
+				tmp_zn0 = ds->zones[ds->num_zones - 2];
+				tmp_zn1 = ds->zones[ds->num_zones - 1];
+				ret = utils_compare_time(&tmp_zn1->start_time,
+							 &tmp_zn0->start_time);
+				if(ret < 0) {
+					utils_err(CFG, "Zones stored in wrong order for %s\n",
+						  ds_node->name);
+					parser_failed = 1;
+					goto cleanup;
+				} else if (!ret) {
+					utils_err(CFG, "Overlapping zones on %s\n",
+						  ds_node->name);
+					parser_failed = 1;
+					goto cleanup;
+				}
+			}
 		}
 		element = element->next;
 	}
@@ -461,19 +487,21 @@ cfg_get_week_schedule(xmlDocPtr config, xmlNodePtr ws_node)
 	element = ws_node->xmlChildrenNode;
 	while (element != NULL) {
 		num_elements++;
-		if(!strncmp((const char*) element->name, "Mon",4))
-			ws->days[0] = cfg_get_day_schedule(config,element);
-		if(!strncmp((const char*) element->name, "Tue",4))
-			ws->days[1] = cfg_get_day_schedule(config,element);
-		if(!strncmp((const char*) element->name, "Wed",4))
-			ws->days[2] = cfg_get_day_schedule(config,element);
-		if(!strncmp((const char*) element->name, "Thu",4))
-			ws->days[3] = cfg_get_day_schedule(config,element);
-		if(!strncmp((const char*) element->name, "Fri",4))
-			ws->days[4] = cfg_get_day_schedule(config,element);
-		if(!strncmp((const char*) element->name, "Sat",4))
-			ws->days[5] = cfg_get_day_schedule(config,element);
+		/* Note: Match these ids with the mapping on struct tm
+		 * which means that Sunday = 0, Monday = 1 etc */
 		if(!strncmp((const char*) element->name, "Sun",4))
+			ws->days[0] = cfg_get_day_schedule(config,element);
+		if(!strncmp((const char*) element->name, "Mon",4))
+			ws->days[1] = cfg_get_day_schedule(config,element);
+		if(!strncmp((const char*) element->name, "Tue",4))
+			ws->days[2] = cfg_get_day_schedule(config,element);
+		if(!strncmp((const char*) element->name, "Wed",4))
+			ws->days[3] = cfg_get_day_schedule(config,element);
+		if(!strncmp((const char*) element->name, "Thu",4))
+			ws->days[4] = cfg_get_day_schedule(config,element);
+		if(!strncmp((const char*) element->name, "Fri",4))
+			ws->days[5] = cfg_get_day_schedule(config,element);
+		if(!strncmp((const char*) element->name, "Sat",4))
 			ws->days[6] = cfg_get_day_schedule(config,element);
 		if(num_elements == 7)
 			break;
@@ -666,7 +694,7 @@ main(int argc, char **argv)
 	struct config cfg = {0};
 	int ret = 0;
 
-	if (argc <= 2) {
+	if (argc < 2) {
 		utils_info(NONE, "Usage: %s <config_file>\n", argv[0]);
 		return(0);
 	}

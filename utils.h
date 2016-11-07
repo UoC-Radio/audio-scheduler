@@ -68,3 +68,4 @@ int utils_is_readable_file(char*filepath);
 /* Misc */
 void utils_trim_string(char* string);
 unsigned int utils_get_random_uint();
+int utils_compare_time(struct tm *tm1, struct tm* tm2);

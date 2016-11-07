@@ -162,12 +162,9 @@ pls_shuffle(char** files, int num_files)
 	files = temp;
 
 	if(utils_is_debug_enabled(SHUF)) {
-		i = num_files;
 		utils_dbg(SHUF, "--== Shuffled list ==--\n");
-		while(i > 0) {
-			utils_dbg(SHUF|SKIP, "%i %s\n", i, files[i - 1]);
-			i--;
-		}
+		for(i = 0; i < num_files; i++)
+			utils_dbg(SHUF|SKIP, "%i %s\n", i, files[i]);
 	}
 
 	return files;

@@ -398,3 +398,18 @@ utils_is_readable_file(char*filepath)
 
 	return 1;
 }
+
+int
+utils_compare_time(struct tm *tm1, struct tm* tm0)
+{
+	time_t t1 = mktime(tm1);
+	time_t t0 = mktime(tm0);
+	double diff = difftime(t1, t0);
+	if(!diff)
+		return 0;
+	if(diff > 0.0L)
+		return 1;
+	if(diff < 0.0L)
+		return -1;
+
+}
