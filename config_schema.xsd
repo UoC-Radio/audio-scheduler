@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+
+<xs:complexType name="Playlist">
+	<xs:sequence>
+		<xs:element name="Path" type="xs:string"/>
+		<xs:element name="Shuffle" type="xs:boolean"/>
+		<xs:element name="FadeDurationSecs" type="xs:positiveInteger" minOccurs="0"/>
+	</xs:sequence>
+</xs:complexType>
+
+<xs:complexType name="IntermediatePlaylist">
+	<xs:sequence>
+		<xs:element name="Path" type="xs:string"/>
+		<xs:element name="Shuffle" type="xs:boolean"/>
+		<xs:element name="FadeDurationSecs" type="xs:positiveInteger" minOccurs="0"/>
+		<xs:element name="SchedIntervalMins" type="xs:positiveInteger"/>
+		<xs:element name="NumSchedItems" type="xs:positiveInteger"/>
+	</xs:sequence>
+	<xs:attribute name="Name" type="xs:string" use="required"/>
+</xs:complexType>
+
+<xs:element name="Zone">
+	<xs:complexType>
+		<xs:sequence>
+			<xs:element name="Maintainer" type="xs:string" minOccurs="0"/>
+			<xs:element name="Description" type="xs:string" minOccurs="0"/>
+			<xs:element name="Comment" type="xs:string" minOccurs="0"/>
+			<xs:element name="Main" type="Playlist"/>
+			<xs:element name="Fallback" type="Playlist" minOccurs="0"/>
+			<xs:element name="Intermediate" type="IntermediatePlaylist" minOccurs="0" maxOccurs="4"/>
+		</xs:sequence>
+		<xs:attribute name="Name" type="xs:string" use="required"/>
+		<xs:attribute name="Start" type="xs:time" use="required"/>
+	</xs:complexType>
+</xs:element>
+
+
+<xs:complexType name="Day">
+	<xs:sequence>
+		<xs:element ref="Zone" maxOccurs="unbounded"/>
+	</xs:sequence>
+</xs:complexType>
+
+<xs:element name="WeekSchedule">
+	<xs:complexType>
+		<xs:sequence>
+			<xs:element name="Mon" type="Day"/>
+			<xs:element name="Tue" type="Day"/>
+			<xs:element name="Wed" type="Day"/>
+			<xs:element name="Thu" type="Day"/>
+			<xs:element name="Fri" type="Day"/>
+			<xs:element name="Sat" type="Day"/>
+			<xs:element name="Sun" type="Day"/>
+		</xs:sequence>
+	</xs:complexType>
+</xs:element>
+
+</xs:schema>
