@@ -379,8 +379,10 @@ cfg_get_day_schedule(xmlDocPtr config, xmlNodePtr ds_node)
 	struct day_schedule *ds = NULL;
 	struct zone *tmp_zn0 = NULL;
 	struct zone *tmp_zn1 = NULL;
+	struct tm *tmp_tm = NULL;
 	xmlNodePtr element = NULL;
 	int num_elements = 0;
+	int got_start_of_day = 0;
 	int ret = 0;
 
 	if(parser_failed)
@@ -409,6 +411,12 @@ cfg_get_day_schedule(xmlDocPtr config, xmlNodePtr ds_node)
 			ds->zones[ds->num_zones - 1] = cfg_get_zone(config,element);
 			if(!ds->zones[ds->num_zones - 1])
 				goto cleanup;
+
+			/* Check if we got a zone with a start time of  00:00:00 */
+			tmp_tm = &ds->zones[ds->num_zones - 1]->start_time;
+			if(tmp_tm->tm_hour == 0 && tmp_tm->tm_min == 0 &&
+			   tmp_tm->tm_sec == 0)
+				got_start_of_day = 1;
 
 			/* Demand that zones are stored in ascending order
 			 * based on their start time. We do this to keep
@@ -439,6 +447,9 @@ cfg_get_day_schedule(xmlDocPtr config, xmlNodePtr ds_node)
 		parser_failed = 1;
 		goto cleanup;
 	}
+
+	if(!got_start_of_day)
+		utils_wrn(CFG, "Nothing scheduled on 00:00:00 for %s\n", ds_node->name);
 
 	utils_dbg(CFG, "Got day schedule, num_zones: %i\n", ds->num_zones);
 
@@ -474,7 +485,6 @@ cfg_get_week_schedule(xmlDocPtr config, xmlNodePtr ws_node)
 {
 	struct week_schedule *ws = NULL;
 	xmlNodePtr element = NULL;
-	int num_elements = 0;
 
 	ws = (struct week_schedule*) malloc(sizeof(struct week_schedule));
 	if (!ws) {
@@ -486,7 +496,6 @@ cfg_get_week_schedule(xmlDocPtr config, xmlNodePtr ws_node)
 
 	element = ws_node->xmlChildrenNode;
 	while (element != NULL) {
-		num_elements++;
 		/* Note: Match these ids with the mapping on struct tm
 		 * which means that Sunday = 0, Monday = 1 etc */
 		if(!strncmp((const char*) element->name, "Sun",4))
@@ -503,14 +512,11 @@ cfg_get_week_schedule(xmlDocPtr config, xmlNodePtr ws_node)
 			ws->days[5] = cfg_get_day_schedule(config,element);
 		if(!strncmp((const char*) element->name, "Sat",4))
 			ws->days[6] = cfg_get_day_schedule(config,element);
-		if(num_elements == 7)
-			break;
 		element = element->next;
 	}
 
-	if(num_elements != 7) {
-		utils_err(CFG, "Got incomplete week schedule (elements: %i)\n", num_elements);
-		parser_failed = 1;
+	if(parser_failed) {
+		utils_err(CFG, "Got incomplete week schedule\n");
 		goto cleanup;
 	}
 
@@ -726,7 +732,8 @@ main(int argc, char **argv)
 	cfg.filepath = argv[1];
 
 	utils_set_log_level(DBG);
-	utils_set_debug_mask(CFG|PLS|SHUF|UTILS);
+//	utils_set_debug_mask(CFG|PLS|SHUF|UTILS);
+	utils_set_debug_mask(CFG);
 
 	ret = cfg_process(&cfg);
 	cfg_cleanup(&cfg);
