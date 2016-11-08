@@ -79,7 +79,8 @@ struct scheduler {
 };
 
 enum state_flags {
-	SCHED_LOADING_NEW	= 1
+	SCHED_FAILED		= 2,
+	SCHED_LOADING_NEW	= 4,
 };
 
 

@@ -192,7 +192,9 @@ pls_process(struct playlist* pls)
 	int ret = 0;
 	int i = 0;
 
+	/* Sanity checks */
 	if(pls->filepath == NULL) {
+		utils_err(PLS, "Called with null argument\n");
 		ret = -1;
 		goto cleanup;
 	}
@@ -208,12 +210,14 @@ pls_process(struct playlist* pls)
 		goto cleanup;
 	}
 
+	/* Store mtime for later checks */
 	pls->last_mtime = utils_get_mtime(pls->filepath);
 	if(!pls->last_mtime) {
 		ret = -1;
 		goto cleanup;
 	}
 
+	/* Open playlist file and start parsing its contents */
 	pls_file = fopen(pls->filepath, "rb");
 	if (pls_file == NULL) {
 		utils_perr(PLS, "Couldn't open file %s", pls->filepath);
@@ -271,6 +275,7 @@ pls_process(struct playlist* pls)
 		goto cleanup;
 	}
 
+	/* Shuffle contents if needed */
 	if(pls->shuffle) {
 		temp = pls_shuffle(pls->items, pls->num_items);
 		if(temp == pls->items)
@@ -297,13 +302,15 @@ pls_reload_if_needed(struct playlist* pls)
 {
 	time_t mtime = utils_get_mtime(pls->filepath);
 	if(!mtime) {
-		utils_err(PLS, "Unable to check mtime for %s\n");
+		utils_err(PLS, "Unable to check mtime for %s\n", pls->filepath);
 		return -1;
 	}
 
 	/* mtime didn't change, no need to reload */
 	if(mtime == pls->last_mtime)
 		return 0;
+
+	utils_dbg(PLS, "Got different mtime, reloading %s\n", pls->filepath);
 
 	/* Re-load playlist */
 	pls_files_cleanup(pls);

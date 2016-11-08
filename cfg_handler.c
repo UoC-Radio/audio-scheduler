@@ -539,12 +539,12 @@ cfg_print_validation_error_msg(void *ctx, const char *fmt, ...)
 	va_end(args);
 }
 
-/* Linked-in config XSD schema */
+/* Linked-in config XSD schema file (config_schema.xsd)*/
 extern const unsigned char _binary_config_schema_xsd_start;
 extern const unsigned char _binary_config_schema_xsd_end;
 
 static int
-cfg_validate_against_schema(xmlDocPtr config, char* schema_filename)
+cfg_validate_against_schema(xmlDocPtr config)
 {
 	xmlSchemaParserCtxtPtr ctx = NULL;
 	xmlSchemaPtr schema = NULL;
@@ -552,6 +552,7 @@ cfg_validate_against_schema(xmlDocPtr config, char* schema_filename)
 	unsigned int len = 0;
 	int ret = 0;
 
+	/* Load XSD shema file from memory and create a parser context */
 	len = (unsigned int) (&_binary_config_schema_xsd_end -
 			      &_binary_config_schema_xsd_start);
 	ctx = xmlSchemaNewMemParserCtxt(&_binary_config_schema_xsd_start, len);
@@ -561,6 +562,7 @@ cfg_validate_against_schema(xmlDocPtr config, char* schema_filename)
 		goto cleanup;
 	}
 
+	/* Run the schema parser and put the result in memory */
 	schema = xmlSchemaParse(ctx);
 	if (!schema) {
 		utils_err(CFG, "Could not parse XSD schema.\n");
@@ -568,6 +570,7 @@ cfg_validate_against_schema(xmlDocPtr config, char* schema_filename)
 		goto cleanup;
 	}
 
+	/* Create a validation context */
 	validation_ctx = xmlSchemaNewValidCtxt(schema);
 	if (!validation_ctx) {
 		utils_err(CFG, "Could not create XSD schema validation context.\n");
@@ -575,9 +578,11 @@ cfg_validate_against_schema(xmlDocPtr config, char* schema_filename)
 		goto cleanup;
 	}
 
+	/* Register error printing callbacks */
 	xmlSetGenericErrorFunc(NULL, cfg_print_validation_error_msg);
 	xmlThrDefSetGenericErrorFunc(NULL, cfg_print_validation_error_msg);
 
+	/* Run validation */
 	ret = xmlSchemaValidateDoc(validation_ctx, config);
 	if (ret != 0)
 		parser_failed = 1;
@@ -612,10 +617,27 @@ cfg_process(struct config *cfg)
 	xmlParserCtxtPtr ctx = NULL;
 	xmlDocPtr  config = NULL;
 	xmlNodePtr root_node = NULL;
-	char* config_filename = cfg->filepath;
-	char* schema_filename = cfg->schema_filepath;
 	int ret = 0;
 	parser_failed = 0;
+
+	/* Sanity checks */
+	if(cfg->filepath == NULL) {
+		utils_err(CFG, "Called with null argument\n");
+		parser_failed = 1;
+		goto cleanup;
+	}
+
+	if(!utils_is_readable_file(cfg->filepath)) {
+		parser_failed = 1;
+		goto cleanup;
+	}
+
+	/* Store mtime for later checks */
+	cfg->last_mtime = utils_get_mtime(cfg->filepath);
+	if(!cfg->last_mtime) {
+		parser_failed = 1;
+		goto cleanup;
+	}
 
 	/* Initialize libxml2 and do version checks for ABI compatibility */
 	LIBXML_TEST_VERSION
@@ -629,7 +651,7 @@ cfg_process(struct config *cfg)
 	}
 
 	/* Parse config file and put result to memory */
-	config = xmlParseFile(config_filename);
+	config = xmlParseFile(cfg->filepath);
 	if (!config) {
 		utils_err(CFG, "Document not parsed successfully.\n");
 		parser_failed = 1;
@@ -650,14 +672,14 @@ cfg_process(struct config *cfg)
 	}
 
 	/* Validate configuration against the configuration schema */
-	ret = cfg_validate_against_schema(config, schema_filename);
+	ret = cfg_validate_against_schema(config);
 	if (ret < 0) {
 		utils_err(CFG, "Configuration did not pass shema validation\n");
 		parser_failed = 1;
 		goto cleanup;
 	}
 
-	/* Fill in the data to the scheduler struct */
+	/* Fill the data to the config struct */
 	cfg->ws = cfg_get_week_schedule(config, root_node);
 
 cleanup:
@@ -675,13 +697,15 @@ cfg_reload_if_needed(struct config *cfg)
 {
 	time_t mtime = utils_get_mtime(cfg->filepath);
 	if(!mtime) {
-		utils_err(PLS, "Unable to check mtime for %s\n");
+		utils_err(CFG, "Unable to check mtime for %s\n", cfg->filepath);
 		return -1;
 	}
 
 	/* mtime didn't change, no need to reload */
 	if(mtime == cfg->last_mtime)
 		return 0;
+
+	utils_dbg(CFG, "Got different mtime, reloading %s\n", cfg->filepath);
 
 	/* Re-load playlist */
 	cfg_cleanup(cfg);
