@@ -223,7 +223,7 @@ cfg_get_ipls(xmlDocPtr config, xmlNodePtr ipls_node)
 		if(!strncmp((const char*) element->name, "FadeDurationSecs", 17))
 			ipls->fade_duration = cfg_get_integer(config, element);
 		if(!strncmp((const char*) element->name, "SchedIntervalMins", 18))
-			ipls->sched_interval = cfg_get_integer(config, element);
+			ipls->sched_interval_mins = cfg_get_integer(config, element);
 		if(!strncmp((const char*) element->name, "NumSchedItems", 14))
 			ipls->num_sched_items = cfg_get_integer(config, element);
 		element = element->next;
@@ -245,7 +245,7 @@ cfg_get_ipls(xmlDocPtr config, xmlNodePtr ipls_node)
 	utils_dbg(CFG, "Got intermediate playlist: %s\n\tshuffle: %s\n\t",
 		  ipls->filepath, ipls->shuffle ? "true" : "false");
 	utils_dbg(CFG|SKIP, "fade_duration: %i\n\tsched_interval: %i\n\tnum_shed_items: %i\n",
-		  ipls->fade_duration, ipls->sched_interval, ipls->num_sched_items);
+		  ipls->fade_duration, ipls->sched_interval_mins, ipls->num_sched_items);
 
 cleanup:
 	if(parser_failed) {
