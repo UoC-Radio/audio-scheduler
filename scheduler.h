@@ -95,3 +95,6 @@ int pls_reload_if_needed(struct playlist* pls);
 void cfg_cleanup(struct config *cfg);
 int cfg_process(struct config *cfg);
 int cfg_reload_if_needed(struct config *cfg);
+
+/* Scheduler callback */
+int sched_get_next(struct scheduler* sched, char** next, int* fade_duration);

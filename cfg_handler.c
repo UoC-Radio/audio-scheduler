@@ -39,7 +39,8 @@ volatile sig_atomic_t	parser_failed;
 static char*
 cfg_get_string(xmlDocPtr config, xmlNodePtr element)
 {
-	char* value = (char*) xmlNodeListGetString(config, element->xmlChildrenNode, 1);
+	char* value = (char*) xmlNodeListGetString(config,
+				element->xmlChildrenNode, 1);
 	if(value == NULL)
 		parser_failed = 1;
 
@@ -82,6 +83,18 @@ cfg_get_boolean(xmlDocPtr config, xmlNodePtr element)
 	return ret;
 }
 
+static char*
+cfg_get_str_attr(xmlNodePtr element, const char* attr)
+{
+	char* value = (char*) xmlGetProp(element, attr);
+	if(value == NULL) {
+		parser_failed = 1;
+		return NULL;
+	}
+	utils_trim_string(value);
+	return value;
+}
+
 static void
 cfg_get_start_attr(xmlDocPtr config, xmlNodePtr element, struct tm *time)
 {
@@ -119,38 +132,45 @@ cfg_get_pls(xmlDocPtr config, xmlNodePtr pls_node)
 {
 	struct playlist *pls = NULL;
 	xmlNodePtr element = NULL;
-	int num_elements = 0;
 	int ret = 0;
 
 	if(parser_failed)
 		return NULL;
 
+	/* Allocate a new playlist structure and
+	 * zero it out */
 	pls = (struct playlist*) malloc(sizeof(struct playlist));
 	if (!pls) {
-		utils_err(CFG, "Unable to allocate playlist !\n");
+		utils_err(CFG, "Unable to allocate playlist structure !\n");
 		parser_failed = 1;
 		return NULL;
 	}
 	memset(pls, 0, sizeof(struct playlist));
 
+	/* Fill it up */
 	element = pls_node->xmlChildrenNode;
 	while (element != NULL) {
-		num_elements++;
 		if(!strncmp((const char*) element->name, "Path", 5))
 			pls->filepath = cfg_get_string(config, element);
 		if(!strncmp((const char*) element->name, "Shuffle", 8))
 			pls->shuffle = cfg_get_boolean(config, element);
 		if(!strncmp((const char*) element->name, "FadeDurationSecs", 17))
 			pls->fade_duration = cfg_get_integer(config, element);
+		if(parser_failed) {
+			utils_err(CFG, "Parsing of playlist element failed\n");
+			goto cleanup;
+		}
 		element = element->next;
 	}
 
-	if(!num_elements) {
-		utils_err(CFG, "Got empty playlist element\n");
+	/* Sanity check, note that fade duration is optional */
+	if(!pls->filepath) {
+		utils_err(CFG, "Filepath missing from playlist element\n");
 		parser_failed = 1;
 		goto cleanup;
 	}
 
+	/* Fill up the items array */
 	ret = pls_process(pls);
 	if(ret < 0) {
 		utils_err(CFG, "Got empty/malformed playlist: %s\n", pls->filepath);
@@ -158,8 +178,8 @@ cfg_get_pls(xmlDocPtr config, xmlNodePtr pls_node)
 		goto cleanup;	
 	}
 
-	utils_dbg(CFG, "Got playlist: %s\n\tshuffle: %s\n\tfade_duration: %i\n",
-		  pls->filepath, pls->shuffle ? "true" : "false", pls->fade_duration);
+	utils_info(CFG, "Got playlist: %s\n\tShuffle: %s\n\tFade duration: %i\n",
+		   pls->filepath, pls->shuffle ? "true" : "false", pls->fade_duration);
 
 cleanup:
 	if(parser_failed) {
@@ -196,12 +216,13 @@ cfg_get_ipls(xmlDocPtr config, xmlNodePtr ipls_node)
 {
 	struct intermediate_playlist *ipls = NULL;
 	xmlNodePtr element = NULL;
-	int num_elements = 0;
 	int ret = 0;
 
 	if(parser_failed)
 		return NULL;
 
+	/* Allocate a new intermediate playlist structure
+	 * and zero it out */
 	ipls = (struct intermediate_playlist*)
 		malloc(sizeof(struct intermediate_playlist));
 	if (!ipls) {
@@ -211,11 +232,17 @@ cfg_get_ipls(xmlDocPtr config, xmlNodePtr ipls_node)
 	}
 	memset(ipls, 0, sizeof(struct intermediate_playlist));
 
-	ipls->name = xmlGetProp(element, "Name");
+	/* Name attribute is mandatory */
+	ipls->name = cfg_get_str_attr(ipls_node, "Name");
+	if(parser_failed) {
+		utils_err(CFG, "Could not get name atrribute");
+		utils_err(CFG|SKIP, " for an intermediate playlist\n");
+		goto cleanup;
+	}
 
+	/* Fill it up */
 	element = ipls_node->xmlChildrenNode;
 	while (element != NULL) {
-		num_elements++;
 		if(!strncmp((const char*) element->name, "Path", 5))
 			ipls->filepath = cfg_get_string(config, element);
 		if(!strncmp((const char*) element->name, "Shuffle", 8))
@@ -226,25 +253,45 @@ cfg_get_ipls(xmlDocPtr config, xmlNodePtr ipls_node)
 			ipls->sched_interval_mins = cfg_get_integer(config, element);
 		if(!strncmp((const char*) element->name, "NumSchedItems", 14))
 			ipls->num_sched_items = cfg_get_integer(config, element);
+		if(parser_failed) {
+			utils_err(CFG, "Parsing of intermediate playlist %s failed\n",
+				  ipls->name);
+			goto cleanup;
+		}
 		element = element->next;
 	}
 
-	if(!num_elements) {
-		utils_err(CFG, "Got empty intermediate playlist element\n");
+	/* Sanity check, note that fade duration is optional */
+	if(!ipls->filepath) {
+		utils_err(CFG, "Filepath missing from %s\n", ipls->name);
 		parser_failed = 1;
 		goto cleanup;
 	}
 
+	if(!ipls->sched_interval_mins) {
+		utils_err(CFG, "No scheduling interval set for %s\n", ipls->name);
+		parser_failed = 1;
+		goto cleanup;
+	}
+
+	if(!ipls->num_sched_items) {
+		utils_err(CFG, "Number of items to be scheduled set to 0 for %s\n",
+			  ipls->name);
+		parser_failed = 1;
+		goto cleanup;
+	}
+
+	/* Fill up the items array */
 	ret = pls_process((struct playlist*) ipls);
 	if(ret < 0) {
-		utils_err(CFG, "Got empty playlist: %s\n", ipls->filepath);
+		utils_err(CFG, "Got empty/malformed playlist: %s\n", ipls->filepath);
 		parser_failed = 1;
 		goto cleanup;	
 	}
 
-	utils_dbg(CFG, "Got intermediate playlist: %s\n\tshuffle: %s\n\t",
-		  ipls->filepath, ipls->shuffle ? "true" : "false");
-	utils_dbg(CFG|SKIP, "fade_duration: %i\n\tsched_interval: %i\n\tnum_shed_items: %i\n",
+	utils_info(CFG, "Got intermediate playlist: %s\n\tFile:%s\n\tShuffle: %s\n\t",
+		  ipls->name, ipls->filepath, ipls->shuffle ? "true" : "false");
+	utils_info(CFG|SKIP, "Fade duration: %i\n\tScheduling interval: %i\n\tItems to schedule: %i\n",
 		  ipls->fade_duration, ipls->sched_interval_mins, ipls->num_sched_items);
 
 cleanup:
@@ -283,6 +330,7 @@ cfg_free_zone(struct zone *zone)
 	for(i = 0; i < zone->num_others && zone->others; i++)
 		if(zone->others[i])
 			cfg_free_ipls(zone->others[i]);
+
 	free(zone->others);
 	free(zone);
 }
@@ -292,11 +340,12 @@ cfg_get_zone(xmlDocPtr config, xmlNodePtr zone_node)
 {
 	struct zone *zn = NULL;
 	xmlNodePtr element = NULL;
-	int num_elements = 0;
 
 	if(parser_failed)
 		return NULL;
 
+	/* Allocate a new zone structure and
+	 * zero it out */
 	zn = (struct zone*) malloc(sizeof(struct zone));
 	if (!zn) {
 		utils_err(CFG, "Unable to allocate zone !\n");
@@ -305,12 +354,24 @@ cfg_get_zone(xmlDocPtr config, xmlNodePtr zone_node)
 	}
 	memset(zn, 0, sizeof(struct zone));
 
-	zn->name = xmlGetProp(zone_node, "Name");
-	cfg_get_start_attr(config, zone_node, &zn->start_time);
+	/* Name and start time attributes are both
+	 * mandatory */
+	zn->name = cfg_get_str_attr(zone_node, "Name");
+	if(parser_failed) {
+		utils_err(CFG, "Could not get name atrribute for a zone\n");
+		goto cleanup;
+	}
 
+	cfg_get_start_attr(config, zone_node, &zn->start_time);
+	if(parser_failed) {
+		utils_err(CFG, "Could not get start time attribute for zone %s\n",
+			  zn->name);
+		goto cleanup;
+	}
+
+	/* Fill it up */
 	element = zone_node->xmlChildrenNode;
 	while (element != NULL) {
-		num_elements++;
 		if(!strncmp((const char*) element->name, "Maintainer", 11))
 			zn->maintainer = cfg_get_string(config, element);
 		if(!strncmp((const char*) element->name, "Description", 12))
@@ -322,6 +383,7 @@ cfg_get_zone(xmlDocPtr config, xmlNodePtr zone_node)
 		if(!strncmp((const char*) element->name, "Fallback", 9))
 			zn->fallback_pls = cfg_get_pls(config,element);
 		if(!strncmp((const char*) element->name, "Intermediate", 13)) {
+			/* Expand the others array */
 			zn->num_others++;
 			zn->others = realloc(zn->others, (zn->num_others *
 					     (sizeof(struct intermediate_playlist*))));
@@ -330,20 +392,27 @@ cfg_get_zone(xmlDocPtr config, xmlNodePtr zone_node)
 				parser_failed = 1;
 				goto cleanup;
 			}
+
+			/* Grab and store the ipls */
 			zn->others[zn->num_others - 1] = cfg_get_ipls(config,element);
+		}
+		if(parser_failed) {
+			utils_err(CFG, "Parsing of zone %s failed\n", zn->name);
+			goto cleanup;
 		}
 		element = element->next;
 	}
 
-	if(!num_elements) {
-		utils_err(CFG, "Got empty zone element\n");
+	/* Note: only Main playlist is mandatory */
+	if(!zn->main_pls) {
+		utils_err(CFG, "Got zone with no main playlist: %s\n", zn->name);
 		parser_failed = 1;
 		goto cleanup;
 	}
 
-	utils_dbg(CFG, "Got zone: %s\n\tMaintainer: %s\n\tDescription: %s\n\t",
+	utils_info(CFG, "Got zone: %s\n\tMaintainer: %s\n\tDescription: %s\n\t",
 		  zn->name, zn->maintainer, zn->description, zn->comment);
-	utils_dbg(CFG|SKIP, "Comment: %s\n\tnum_others: %i\n", zn->comment, zn->num_others);
+	utils_info(CFG|SKIP, "Comment: %s\n\tnum_others: %i\n", zn->comment, zn->num_others);
 
 cleanup:
 	if(parser_failed) {
@@ -381,13 +450,14 @@ cfg_get_day_schedule(xmlDocPtr config, xmlNodePtr ds_node)
 	struct zone *tmp_zn1 = NULL;
 	struct tm *tmp_tm = NULL;
 	xmlNodePtr element = NULL;
-	int num_elements = 0;
 	int got_start_of_day = 0;
 	int ret = 0;
 
 	if(parser_failed)
 		return NULL;
 
+	/* Allocate a day schedule structure and
+	 * zero it out */
 	ds = (struct day_schedule*) malloc(sizeof(struct day_schedule));
 	if (!ds) {
 		utils_err(CFG, "Unable to allocate day schedule !\n");
@@ -396,54 +466,63 @@ cfg_get_day_schedule(xmlDocPtr config, xmlNodePtr ds_node)
 	}
 	memset(ds, 0, sizeof(struct day_schedule));
 
+	/* Fill it up */
 	element = ds_node->xmlChildrenNode;
 	while (element != NULL) {
-		num_elements++;
-		if(!strncmp((const char*) element->name, "Zone",5)) {
-			ds->num_zones++;
-			ds->zones = realloc(ds->zones, (ds->num_zones *
-					    (sizeof(struct day_schedule*))));
-			if(!ds->zones) {
-				utils_err(CFG, "Could not re-alloc day schedule!\n");
+		/* Only zones are expected */
+		if(strncmp((const char*) element->name, "Zone",5) != 0) {
+			element = element->next;
+			continue;
+		}
+
+		/* Expand the zones array */
+		ds->num_zones++;
+		ds->zones = realloc(ds->zones, (ds->num_zones *
+				    (sizeof(struct day_schedule*))));
+		if(!ds->zones) {
+			utils_err(CFG, "Could not re-alloc day schedule!\n");
+			parser_failed = 1;
+			goto cleanup;
+		}
+		ds->zones[ds->num_zones - 1] = cfg_get_zone(config,element);
+		if((!ds->zones[ds->num_zones - 1]) || parser_failed){
+			utils_err(CFG, "Parsing of a day schedule failed\n");
+			goto cleanup;
+		}
+
+		/* Check if we got a zone with a start time of  00:00:00 */
+		tmp_tm = &ds->zones[ds->num_zones - 1]->start_time;
+		if(tmp_tm->tm_hour == 0 && tmp_tm->tm_min == 0 &&
+		   tmp_tm->tm_sec == 0)
+			got_start_of_day = 1;
+
+		/* Demand that zones are stored in ascending order
+		 * based on their start time. We do this to keep
+		 * the lookup code simple and efficient. */
+		if(ds->num_zones > 1) {
+			tmp_zn0 = ds->zones[ds->num_zones - 2];
+			tmp_zn1 = ds->zones[ds->num_zones - 1];
+			ret = utils_compare_time(&tmp_zn1->start_time,
+						 &tmp_zn0->start_time, 1);
+			if(ret < 0) {
+				utils_err(CFG, "Zones stored in wrong order for %s\n",
+					  ds_node->name);
+				parser_failed = 1;
+				goto cleanup;
+			} else if (!ret) {
+				utils_err(CFG, "Overlapping zones on %s\n",
+					  ds_node->name);
 				parser_failed = 1;
 				goto cleanup;
 			}
-			ds->zones[ds->num_zones - 1] = cfg_get_zone(config,element);
-			if(!ds->zones[ds->num_zones - 1])
-				goto cleanup;
-
-			/* Check if we got a zone with a start time of  00:00:00 */
-			tmp_tm = &ds->zones[ds->num_zones - 1]->start_time;
-			if(tmp_tm->tm_hour == 0 && tmp_tm->tm_min == 0 &&
-			   tmp_tm->tm_sec == 0)
-				got_start_of_day = 1;
-
-			/* Demand that zones are stored in ascending order
-			 * based on their start time. We do this to keep
-			 * the lookup code simple and efficient. */
-			if(ds->num_zones > 1) {
-				tmp_zn0 = ds->zones[ds->num_zones - 2];
-				tmp_zn1 = ds->zones[ds->num_zones - 1];
-				ret = utils_compare_time(&tmp_zn1->start_time,
-							 &tmp_zn0->start_time, 1);
-				if(ret < 0) {
-					utils_err(CFG, "Zones stored in wrong order for %s\n",
-						  ds_node->name);
-					parser_failed = 1;
-					goto cleanup;
-				} else if (!ret) {
-					utils_err(CFG, "Overlapping zones on %s\n",
-						  ds_node->name);
-					parser_failed = 1;
-					goto cleanup;
-				}
-			}
 		}
+
 		element = element->next;
 	}
 
-	if(!num_elements) {
-		utils_err(CFG, "Got empty day schedule element\n");
+	/* At least a zone is needed */
+	if(!ds->num_zones) {
+		utils_err(CFG, "Got empty day schedule element (%s)\n", ds_node->name);
 		parser_failed = 1;
 		goto cleanup;
 	}
@@ -451,7 +530,7 @@ cfg_get_day_schedule(xmlDocPtr config, xmlNodePtr ds_node)
 	if(!got_start_of_day)
 		utils_wrn(CFG, "Nothing scheduled on 00:00:00 for %s\n", ds_node->name);
 
-	utils_dbg(CFG, "Got day schedule, num_zones: %i\n", ds->num_zones);
+	utils_info(CFG, "Got day schedule for %s, num_zones: %i\n", ds_node->name, ds->num_zones);
 
 cleanup:
 	if(parser_failed) {
@@ -485,7 +564,10 @@ cfg_get_week_schedule(xmlDocPtr config, xmlNodePtr ws_node)
 {
 	struct week_schedule *ws = NULL;
 	xmlNodePtr element = NULL;
+	int i = 0;
 
+	/* Allocate a week schedule structure
+	 * and zero it out */
 	ws = (struct week_schedule*) malloc(sizeof(struct week_schedule));
 	if (!ws) {
 		utils_err(CFG, "Unable to allocate week schedule !\n");
@@ -494,6 +576,7 @@ cfg_get_week_schedule(xmlDocPtr config, xmlNodePtr ws_node)
 	}
 	memset(ws, 0, sizeof(struct week_schedule));
 
+	/* Fill it up */
 	element = ws_node->xmlChildrenNode;
 	while (element != NULL) {
 		/* Note: Match these ids with the mapping on struct tm
@@ -512,11 +595,19 @@ cfg_get_week_schedule(xmlDocPtr config, xmlNodePtr ws_node)
 			ws->days[5] = cfg_get_day_schedule(config,element);
 		if(!strncmp((const char*) element->name, "Sat",4))
 			ws->days[6] = cfg_get_day_schedule(config,element);
+		if(parser_failed) {
+			utils_err(CFG, "Parsing of week schedule failed\n");
+			goto cleanup;
+		}
 		element = element->next;
 	}
 
-	if(parser_failed) {
-		utils_err(CFG, "Got incomplete week schedule\n");
+	/* All days of the week should be filled */
+	for(i = 0; i < 7; i++ ) {
+		if(ws->days[i])
+			continue;
+		utils_err(CFG, "Got empty/incomplete week schedule\n");
+		parser_failed = 1;
 		goto cleanup;
 	}
 
@@ -693,8 +784,10 @@ cleanup:
 	xmlFreeDoc(config);
 	xmlFreeParserCtxt(ctx);
 	xmlCleanupParser();
-	if(parser_failed)
+	if(parser_failed) {
+		ret = -1;
 		cfg_cleanup(cfg);
+	}
 	return ret;
 }
 
@@ -711,31 +804,9 @@ cfg_reload_if_needed(struct config *cfg)
 	if(mtime == cfg->last_mtime)
 		return 0;
 
-	utils_dbg(CFG, "Got different mtime, reloading %s\n", cfg->filepath);
+	utils_info(CFG, "Got different mtime, reloading %s\n", cfg->filepath);
 
 	/* Re-load playlist */
 	cfg_cleanup(cfg);
 	return cfg_process(cfg);
-}
-
-int
-main(int argc, char **argv)
-{
-	struct config cfg = {0};
-	int ret = 0;
-
-	if (argc < 2) {
-		utils_info(NONE, "Usage: %s <config_file>\n", argv[0]);
-		return(0);
-	}
-
-	cfg.filepath = argv[1];
-
-	utils_set_log_level(DBG);
-//	utils_set_debug_mask(CFG|PLS|SHUF|UTILS);
-	utils_set_debug_mask(CFG);
-
-	ret = cfg_process(&cfg);
-	cfg_cleanup(&cfg);
-	return ret;
 }

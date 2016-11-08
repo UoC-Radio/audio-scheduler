@@ -5,6 +5,6 @@
 # Make an object out of the xsd file
 ld -r -b binary -o config_schema.o config_schema.xsd
 
-gcc -fms-extensions -I/usr/include/libxml2/ -g -DDEBUG cfg_handler.c pls_handler.c utils.c config_schema.o -lxml2 -o test
+gcc -fms-extensions -I/usr/include/libxml2/ -g -DDEBUG cfg_handler.c pls_handler.c utils.c scheduler.c main.c config_schema.o -lxml2 -o test
 
 rm config_schema.o
