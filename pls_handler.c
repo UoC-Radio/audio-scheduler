@@ -125,20 +125,20 @@ cleanup:
 * SHUFFLER *
 \**********/
 
-static char**
-pls_shuffle(char** files, int num_files)
+int
+pls_shuffle(struct playlist* pls)
 {
 	char** temp = NULL;
-	int array_size = num_files * sizeof(char*);
-	int remaining = num_files;
+	int array_size = pls->num_items * sizeof(char*);
+	int remaining = pls->num_items;
 	unsigned int temp_idx = 0;
-	unsigned int files_idx = 0;
+	unsigned int items_idx = 0;
 	int i = 0;
 
 	temp = malloc(array_size);
 	if(!temp) {
 		utils_err(PLS, "Could not allocate temporary file array\n");
-		return files;
+		return -1;
 	}
 	memset(temp, 0, array_size);
 
@@ -148,26 +148,26 @@ pls_shuffle(char** files, int num_files)
 	 * many collisions here and this should
 	 * complete fast enough */
 	while(remaining > 0) {
-		temp_idx = utils_get_random_uint() % num_files;
+		temp_idx = utils_get_random_uint() % pls->num_items;
 
 		/* Slot taken, re-try */
 		if(temp[temp_idx] != NULL)
 			continue;
 
-		temp[temp_idx] = files[files_idx++];
+		temp[temp_idx] = pls->items[items_idx++];
 		remaining--;
 	}
 
-	free(files);
-	files = temp;
+	free(pls->items);
+	pls->items = temp;
 
 	if(utils_is_debug_enabled(SHUF)) {
 		utils_dbg(SHUF, "--== Shuffled list ==--\n");
-		for(i = 0; i < num_files; i++)
-			utils_dbg(SHUF|SKIP, "%i %s\n", i, files[i]);
+		for(i = 0; i < pls->num_items; i++)
+			utils_dbg(SHUF|SKIP, "%i %s\n", i, pls->items[i]);
 	}
 
-	return files;
+	return 0;
 }
 
 
@@ -277,10 +277,11 @@ pls_process(struct playlist* pls)
 
 	/* Shuffle contents if needed */
 	if(pls->shuffle) {
-		temp = pls_shuffle(pls->items, pls->num_items);
-		if(temp == pls->items)
-			utils_wrn(PLS, "Shuffling failed for %s\n", pls->filepath);
-		pls->items = temp;
+		ret = pls_shuffle(pls);
+		if(ret < 0) {
+			utils_err(PLS, "Shuffling failed for %s\n", pls->filepath);
+			goto cleanup;
+		}
 	}
 
 	utils_info(PLS, "Got %i files from %s\n", pls->num_items, pls->filepath);

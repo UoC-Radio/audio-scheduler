@@ -87,6 +87,7 @@ enum state_flags {
 
 /* Playlist handling */
 void pls_files_cleanup(struct playlist* pls);
+int pls_shuffle(struct playlist* pls);
 int pls_process(struct playlist* pls);
 int pls_reload_if_needed(struct playlist* pls);
 
