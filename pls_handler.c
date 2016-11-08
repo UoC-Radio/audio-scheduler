@@ -82,8 +82,8 @@ pls_add_file(char* filepath, char **files, int *num_files)
 	 * Note that M3Us may also contain
 	 * folders, this is not supported here
 	 * for now */
-//	if(!utils_is_readable_file(filepath))
-//		goto cleanup;
+	if(!utils_is_readable_file(filepath))
+		goto cleanup;
 
 	/* Get size of the filepath string, including
 	 * null terminator */

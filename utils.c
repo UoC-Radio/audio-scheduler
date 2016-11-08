@@ -386,7 +386,7 @@ int
 utils_is_readable_file(char*filepath)
 {
 	int ret = 0;
-
+#ifndef TEST
 	if(!utils_is_regular_file(filepath))
 		return 0;
 
@@ -395,7 +395,7 @@ utils_is_readable_file(char*filepath)
 		utils_pwrn(UTILS, "access(%s) failed", filepath);
 		return 0;
 	}
-
+#endif
 	return 1;
 }
 

@@ -22,14 +22,14 @@
 #include "scheduler.h"
 #include "utils.h"
 #include <string.h>
-#include <time.h>		/* For strptime() */
+#include <time.h>		/* For strptime() and time() */
 #include <signal.h>		/* For sig_atomic_t */
 #include <libxml/parser.h>	/* For parser context etc */
 #include <libxml/tree.h>	/* For grabbing stuff off the tree */
 #include <libxml/valid.h>	/* For validation context etc */
 #include <libxml/xmlschemas.h>	/* For schema context etc */
 
-volatile sig_atomic_t	parser_failed;
+static volatile sig_atomic_t	parser_failed = 0;
 
 
 /*********\
@@ -215,6 +215,7 @@ static struct intermediate_playlist*
 cfg_get_ipls(xmlDocPtr config, xmlNodePtr ipls_node)
 {
 	struct intermediate_playlist *ipls = NULL;
+	time_t curr_time = time(NULL);
 	xmlNodePtr element = NULL;
 	int ret = 0;
 
@@ -288,6 +289,10 @@ cfg_get_ipls(xmlDocPtr config, xmlNodePtr ipls_node)
 		parser_failed = 1;
 		goto cleanup;	
 	}
+
+	/* Initialize ipls by setting sched_items_pending and last_scheduled */
+	ipls->sched_items_pending = ipls->num_sched_items;
+	ipls->last_scheduled = curr_time;
 
 	utils_info(CFG, "Got intermediate playlist: %s\n\tFile:%s\n\tShuffle: %s\n\t",
 		  ipls->name, ipls->filepath, ipls->shuffle ? "true" : "false");
@@ -706,6 +711,7 @@ cfg_cleanup(struct config *cfg)
 	if(cfg->ws != NULL)
 		cfg_free_week_schedule(cfg->ws);
 	cfg->ws = NULL;
+	free(cfg);
 }
 
 int

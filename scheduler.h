@@ -96,5 +96,7 @@ void cfg_cleanup(struct config *cfg);
 int cfg_process(struct config *cfg);
 int cfg_reload_if_needed(struct config *cfg);
 
-/* Scheduler callback */
+/* Scheduler entry points */
 int sched_get_next(struct scheduler* sched, char** next, int* fade_duration);
+int sched_init(struct scheduler* sched, char* config_filepath);
+void sched_cleanup(struct scheduler* sched);
