@@ -399,12 +399,31 @@ utils_is_readable_file(char*filepath)
 	return 1;
 }
 
+
+static void
+utils_tm_cleanup_date(struct tm *tm)
+{
+	/* Zero-out the date part */
+	tm->tm_mday = 0;
+	tm->tm_mon = 0;
+	tm->tm_year = 0;
+	tm->tm_wday = 0;
+	tm->tm_yday = 0;
+}
+
 int
 utils_compare_time(struct tm *tm1, struct tm* tm0)
 {
-	time_t t1 = mktime(tm1);
-	time_t t0 = mktime(tm0);
-	double diff = difftime(t1, t0);
+	time_t t1 = 0;
+	time_t t0 = 0;
+	double diff = 0.0L;
+
+	utils_tm_cleanup_date(tm0);
+	utils_tm_cleanup_date(tm1);
+
+	t1 = mktime(tm1);
+	t0 = mktime(tm0);
+	diff = difftime(t1, t0);
 	if(!diff)
 		return 0;
 	if(diff > 0.0L)
