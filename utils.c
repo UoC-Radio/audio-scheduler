@@ -412,14 +412,16 @@ utils_tm_cleanup_date(struct tm *tm)
 }
 
 int
-utils_compare_time(struct tm *tm1, struct tm* tm0)
+utils_compare_time(struct tm *tm1, struct tm* tm0, int no_date)
 {
 	time_t t1 = 0;
 	time_t t0 = 0;
 	double diff = 0.0L;
 
-	utils_tm_cleanup_date(tm0);
-	utils_tm_cleanup_date(tm1);
+	if(no_date) {
+		utils_tm_cleanup_date(tm0);
+		utils_tm_cleanup_date(tm1);
+	}
 
 	t1 = mktime(tm1);
 	t0 = mktime(tm0);

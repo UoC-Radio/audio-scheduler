@@ -40,9 +40,10 @@ struct intermediate_playlist {
 	struct playlist;
 
 	char*	name;
-	int	sched_interval;
+	int	sched_interval_mins;
 	time_t	last_scheduled;
 	int	num_sched_items;
+	int	sched_items_pending;
 };
 
 struct zone {

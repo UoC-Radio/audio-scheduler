@@ -417,7 +417,7 @@ cfg_get_day_schedule(xmlDocPtr config, xmlNodePtr ds_node)
 				tmp_zn0 = ds->zones[ds->num_zones - 2];
 				tmp_zn1 = ds->zones[ds->num_zones - 1];
 				ret = utils_compare_time(&tmp_zn1->start_time,
-							 &tmp_zn0->start_time);
+							 &tmp_zn0->start_time, 1);
 				if(ret < 0) {
 					utils_err(CFG, "Zones stored in wrong order for %s\n",
 						  ds_node->name);
