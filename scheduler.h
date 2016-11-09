@@ -20,14 +20,21 @@
 
 #include <time.h> /* For time_t */
 
+struct fader {
+	int	fadein_duration_secs;
+	int	fadeout_duration_secs;
+	float	min_lvl;
+	float	max_lvl;
+};
+
 struct playlist {
 	char*	filepath;
 	int	num_items;
 	char**	items;
 	int	shuffle;
 	time_t	last_mtime;
-	int	fade_duration;
 	int	curr_idx;
+	struct fader *fader;
 };
 
 struct intermediate_playlist {
@@ -97,6 +104,6 @@ int cfg_process(struct config *cfg);
 int cfg_reload_if_needed(struct config *cfg);
 
 /* Scheduler entry points */
-int sched_get_next(struct scheduler* sched, char** next, int* fade_duration);
+int sched_get_next(struct scheduler* sched, char** next, struct fader** fader);
 int sched_init(struct scheduler* sched, char* config_filepath);
 void sched_cleanup(struct scheduler* sched);

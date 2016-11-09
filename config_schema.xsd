@@ -1,11 +1,34 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
 
+<xs:simpleType name="FadeDurationSecs">
+	<xs:restriction base="xs:integer">
+		<xs:minInclusive value="0"/>
+		<xs:maxInclusive value="10"/>
+	</xs:restriction>
+</xs:simpleType>
+
+<xs:simpleType name="VolumeLevel">
+	<xs:restriction base="xs:float">
+		<xs:minInclusive value="0.0"/>
+		<xs:maxInclusive value="1.0"/>
+	</xs:restriction>
+</xs:simpleType>
+
+<xs:complexType name="Fader">
+	<xs:sequence>
+		<xs:element name="FadeInDurationSecs" type="FadeDurationSecs" minOccurs="0"/>
+		<xs:element name="FadeOutDurationSecs" type="FadeDurationSecs" minOccurs="0"/>
+		<xs:element name="MinLevel" type="VolumeLevel" minOccurs="0"/>
+		<xs:element name="MaxLevel" type="VolumeLevel" minOccurs="0"/>
+	</xs:sequence>
+</xs:complexType>
+
 <xs:complexType name="Playlist">
 	<xs:sequence>
 		<xs:element name="Path" type="xs:string"/>
 		<xs:element name="Shuffle" type="xs:boolean"/>
-		<xs:element name="FadeDurationSecs" type="xs:positiveInteger" minOccurs="0"/>
+		<xs:element name="Fader" type="Fader" minOccurs="0"/>
 	</xs:sequence>
 </xs:complexType>
 
@@ -13,7 +36,7 @@
 	<xs:sequence>
 		<xs:element name="Path" type="xs:string"/>
 		<xs:element name="Shuffle" type="xs:boolean"/>
-		<xs:element name="FadeDurationSecs" type="xs:positiveInteger" minOccurs="0"/>
+		<xs:element name="Fader" type="Fader" minOccurs="0"/>
 		<xs:element name="SchedIntervalMins" type="xs:positiveInteger"/>
 		<xs:element name="NumSchedItems" type="xs:positiveInteger"/>
 	</xs:sequence>

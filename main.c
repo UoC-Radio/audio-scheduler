@@ -18,7 +18,7 @@ main(int argc, char **argv)
 	struct sigaction sa = {0};
 	int ret = 0;
 	char* next;
-	int fade_duration = 0;
+	struct fader *fdr = NULL;
 
 	if (argc < 2) {
 		utils_info(NONE, "Usage: %s <config_file>\n", argv[0]);
@@ -48,8 +48,8 @@ main(int argc, char **argv)
 	scheduler_active = 1;
 
 	while(scheduler_active) {
-		ret = sched_get_next(&sched, &next, &fade_duration);
-		utils_info(PLR, "Playing: %s, fade duration: %i\n", next, fade_duration);
+		ret = sched_get_next(&sched, &next, &fdr);
+		utils_info(PLR, "Playing: %s %s fader\n", next, fdr ? "with" : "without");
 		sleep(1);
 	}
 
