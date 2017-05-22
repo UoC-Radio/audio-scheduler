@@ -206,6 +206,8 @@ next:
     goto next;
   }
 
+  g_atomic_int_set (&item->active, 1);
+
   utils_dbg (PLR, "item %p: scheduling to play '%s'\n", item, item->uri);
 
   /* configure fade properties */
