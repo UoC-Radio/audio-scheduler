@@ -1,14 +1,15 @@
 #include "scheduler.h"
+#include "player.h"
 #include "utils.h"
 #include <unistd.h>	/* For sleep() */
 #include <signal.h>	/* For sig_atomic_t and signal handling */
 
-static volatile sig_atomic_t	scheduler_active = 0;
+static struct player player = {0};
 
 static void
 signal_handler(int sig, siginfo_t * info, void *extra)
 {
-	scheduler_active = 0;
+	player_loop_quit (&player);
 }
 
 int
@@ -17,13 +18,22 @@ main(int argc, char **argv)
 	struct scheduler sched = {0};
 	struct sigaction sa = {0};
 	int ret = 0;
-	char* next;
-	struct fader *fdr = NULL;
 
 	if (argc < 2) {
 		utils_info(NONE, "Usage: %s <config_file>\n", argv[0]);
 		return(0);
 	}
+
+	utils_set_log_level(DBG);
+	utils_set_debug_mask(CFG|PLS|PLR|SHUF|SCHED|UTILS);
+
+	ret = sched_init(&sched, argv[1]);
+	if (ret < 0) {
+		utils_err(NONE, "Unable to initialize scheduler\n");
+		return -1;
+	}
+
+	player_init(&player, &sched);
 
 	/* Install signal handler */
 	/* Install a signal handler for graceful exit */
@@ -35,25 +45,10 @@ main(int argc, char **argv)
 	sigaction(SIGHUP, &sa, NULL);
 	sigaction(SIGINT, &sa, NULL);
 
-	utils_set_log_level(DBG);
-	utils_set_debug_mask(CFG|PLS|SHUF|SCHED|UTILS);
-//	utils_set_debug_mask(CFG|SCHED);
-
-	ret = sched_init(&sched, argv[1]);
-	if (ret < 0) {
-		utils_err(NONE, "Unable to initialize scheduler\n");
-		return -1;
-	}
-
-	scheduler_active = 1;
-
-	while(scheduler_active) {
-		ret = sched_get_next(&sched, &next, &fdr);
-		utils_info(PLR, "Playing: %s %s fader\n", next, fdr ? "with" : "without");
-		sleep(1);
-	}
+	player_loop(&player);
 
 	utils_info(PLR, "Graceful exit...\n");
+	player_cleanup(&player);
 	sched_cleanup(&sched);
 	return ret;
 }
