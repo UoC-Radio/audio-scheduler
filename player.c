@@ -249,6 +249,9 @@ static gboolean
 player_bus_watch (GstBus *bus, GstMessage *msg, struct player *self)
 {
   const GstStructure *s;
+  GError *error;
+  gchar *debug = NULL;
+  gint i;
 
   switch (GST_MESSAGE_TYPE (msg)) {
     case GST_MESSAGE_APPLICATION:
@@ -258,8 +261,106 @@ player_bus_watch (GstBus *bus, GstMessage *msg, struct player *self)
         player_link_next (self);
       }
       break;
+
+    case GST_MESSAGE_EOS:
+      /* EOS can only be received when audiomixer receives GST_EVENT_EOS
+       * on a sink and has no other sink with more data available at that
+       * moment, which can only happen if the scheduler stopped giving
+       * us new files to enqueue */
+      utils_info (PLR, "we got EOS, which means there is no file "
+          "in the play queue; exiting...\n");
+      g_main_loop_quit (self->loop);
+      break;
+
+    case GST_MESSAGE_INFO:
+      gst_message_parse_info (msg, &error, &debug);
+      utils_info (PLR, "INFO from element %s: %s\n",
+          GST_OBJECT_NAME (GST_MESSAGE_SRC (msg)),
+          error->message);
+      g_clear_error (&error);
+      if (debug) {
+        utils_info (PLR, "INFO debug message: %s\n", debug);
+        g_free (debug);
+      }
+      break;
+
+    case GST_MESSAGE_WARNING:
+      gst_message_parse_warning (msg, &error, &debug);
+      utils_wrn (PLR, "WARNING from element %s: %s\n",
+          GST_OBJECT_NAME (GST_MESSAGE_SRC (msg)),
+          error->message);
+      g_clear_error (&error);
+      if (debug) {
+        utils_wrn (PLR, "WARNING debug message: %s\n", debug);
+        g_free (debug);
+      }
+      break;
+
     case GST_MESSAGE_ERROR:
-      //TODO handle errors gracefully
+      gst_message_parse_error (msg, &error, &debug);
+      utils_wrn (PLR, "ERROR from element %s: %s\n",
+          GST_OBJECT_NAME (GST_MESSAGE_SRC (msg)),
+          error->message);
+      g_clear_error (&error);
+      if (debug) {
+        utils_wrn (PLR, "ERROR debug message: %s\n", debug);
+        g_free (debug);
+      }
+
+      /* check if the message came from a decodebin and attempt to recover;
+       * it is possible to get an error there, in case of an unsupported
+       * codec for example, or maybe a file read error... */
+      for (i = 0; i < PLAY_QUEUE_SIZE; i++) {
+        gint ptr;
+        struct play_queue_item *item;
+
+        ptr = self->play_queue_ptr;
+        if (--ptr < 0)
+          ptr = PLAY_QUEUE_SIZE - 1;
+        item = &self->play_queue[ptr];
+
+        if (item->decodebin && gst_object_has_as_ancestor (GST_MESSAGE_SRC (msg),
+                  GST_OBJECT (item->decodebin)))
+        {
+          if (i == 0) {
+            /*
+             * i == 0 --> we decreased play_queue_ptr by 1, so this is the
+             * item that we linked last; for this case we can recover by
+             * getting the next file in that play queue slot
+             */
+            utils_info (PLR, "error message originated from last play "
+                "queue item's decodebin; attempting to recover\n");
+
+            if (--self->play_queue_ptr < 0)
+              self->play_queue_ptr = PLAY_QUEUE_SIZE - 1;
+            g_atomic_int_set (&item->active, 0);
+            player_link_next (self);
+          } else {
+            /*
+             * i > 0, so this is a decodebin that we had plugged earlier
+             * and probably worked before; we can't do much here, we just
+             * leave it deactivated and hope that the play queue will catch
+             * up and fill that slot later. there will *probably* be an audio
+             * gap here, of course.
+             */
+            utils_info (PLR, "error message originated from a play queue "
+                "item's decodebin; deactivating and hoping for the best\n");
+
+            g_atomic_int_set (&item->active, 0);
+          }
+
+          /* break out of the for loop; we found the guilty element already */
+          break;
+        }
+      }
+
+      /* if we didn't find the guilty element... */
+      if (i == PLAY_QUEUE_SIZE) {
+        utils_err (PLR, "error originated from a critical element; "
+            "the pipeline cannot continue working, sorry!\n");
+        g_main_loop_quit (self->loop);
+      }
+
       break;
     default:
       break;

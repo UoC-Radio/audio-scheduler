@@ -49,7 +49,7 @@ struct player
   GstElement *mixer;
 
   struct play_queue_item play_queue[PLAY_QUEUE_SIZE];
-  guint play_queue_ptr;
+  gint play_queue_ptr;
   GstClockTime previous_offset;
 };
 
