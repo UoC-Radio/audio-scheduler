@@ -1,11 +1,12 @@
 CC=gcc
 LD=ld
-CFLAGS=-fms-extensions -DTEST -Wall `pkg-config --cflags --libs libxml-2.0`
+CFLAGS=-fms-extensions -DTEST -Wall `pkg-config --cflags --libs libxml-2.0 gstreamer-controller-1.0`
 
 TARGET=audio-scheduler
 
 SRCS=cfg_handler.c \
      pls_handler.c \
+     player.c \
      utils.c \
      scheduler.c \
      main.c \
