@@ -30,7 +30,7 @@ static void
 play_queue_item_cleanup (struct play_queue_item * item)
 {
   if (item->uri) {
-    utils_dbg (PLR, "item %p: cleaning up", item);
+    utils_dbg (PLR, "item %p: cleaning up\n", item);
     g_free (item->uri);
     if (item->decodebin) {
       gst_element_set_locked_state (item->decodebin, TRUE);
@@ -56,7 +56,7 @@ play_queue_item_set_fade (struct play_queue_item * item,
   GstTimedValueControlSource *tvcs;
 
   utils_dbg (PLR, "item %p: scheduling fade from %lf (@ %" GST_TIME_FORMAT ") "
-      "to %lf (@ %" GST_TIME_FORMAT ")", item,
+      "to %lf (@ %" GST_TIME_FORMAT ")\n", item,
       start_value, GST_TIME_ARGS (start), end_value, GST_TIME_ARGS (end));
 
   cs = gst_interpolation_control_source_new ();
@@ -93,7 +93,8 @@ mixer_sink_event (GstPad * pad, GstPadProbeInfo * info,
       const GstSegment *segment;
       GstClockTime start, end;
 
-      utils_dbg (PLR, "item %p: duration is %" G_GINT64_FORMAT, item, duration);
+      utils_dbg (PLR, "item %p: duration is %" G_GINT64_FORMAT "\n", item,
+          duration);
       if (item->fader.fadeout_duration_secs > 0) {
         end = duration - item->fader.fadeout_duration_secs * GST_SECOND;
         play_queue_item_set_fade (item, end, item->fader.max_lvl,
@@ -111,7 +112,7 @@ mixer_sink_event (GstPad * pad, GstPadProbeInfo * info,
       end = gst_segment_to_running_time (segment, GST_FORMAT_TIME, end);
 
       utils_dbg (PLR, "prev offset %" GST_TIME_FORMAT ", start %" GST_TIME_FORMAT
-          ", end %" GST_TIME_FORMAT, GST_TIME_ARGS (item->player->previous_offset),
+          ", end %" GST_TIME_FORMAT "\n", GST_TIME_ARGS (item->player->previous_offset),
           GST_TIME_ARGS (start), GST_TIME_ARGS (end));
 
       item->player->previous_offset += end - start;
@@ -141,7 +142,7 @@ decodebin_pad_added (GstElement * decodebin, GstPad * pad,
   gst_pad_link (pad, item->mixer_sink);
 
   utils_dbg (PLR, "item %p: decodebin pad added, linked to %s:%s, offset %"
-      GST_TIME_FORMAT, item, GST_DEBUG_PAD_NAME (item->mixer_sink),
+      GST_TIME_FORMAT "\n", item, GST_DEBUG_PAD_NAME (item->mixer_sink),
       GST_TIME_ARGS (item->player->previous_offset));
 
   /* schedule fade in */
@@ -192,20 +193,20 @@ player_link_next (struct player * self)
 next:
   /* ask scheduler for the next item */
   if (sched_get_next (self->scheduler, &file, &fader) != 0) {
-    utils_err (PLR, "No more files to play!!");
+    utils_err (PLR, "No more files to play!!\n");
     return;
   }
 
   /* convert to file:// URI */
   item->uri = gst_filename_to_uri (file, &error);
   if (error) {
-    utils_wrn (PLR, "Failed to convert filename '%s' to URI: %s", file,
+    utils_wrn (PLR, "Failed to convert filename '%s' to URI: %s\n", file,
         error->message);
     g_clear_error (&error);
     goto next;
   }
 
-  utils_dbg (PLR, "item %p: scheduling to play '%s'", item, item->uri);
+  utils_dbg (PLR, "item %p: scheduling to play '%s'\n", item, item->uri);
 
   /* configure fade properties */
   if (fader) {
@@ -280,7 +281,7 @@ player_init (struct player* self, struct scheduler* scheduler)
   sink = gst_element_factory_make ("autoaudiosink", NULL);
 
   if (!self->mixer || !sink) {
-    utils_err (PLR, "Your GStreamer installation is missing required elements");
+    utils_err (PLR, "Your GStreamer installation is missing required elements\n");
     g_clear_object (&self->mixer);
     g_clear_object (&sink);
     player_cleanup (self);
@@ -289,7 +290,7 @@ player_init (struct player* self, struct scheduler* scheduler)
 
   gst_bin_add_many (GST_BIN (self->pipeline), self->mixer, sink, NULL);
   if (gst_element_link (self->mixer, sink) != GST_PAD_LINK_OK) {
-    utils_err (PLR, "Failed to link audiomixer to audio sink. Check caps");
+    utils_err (PLR, "Failed to link audiomixer to audio sink. Check caps\n");
     player_cleanup (self);
     return -1;
   }
@@ -298,7 +299,7 @@ player_init (struct player* self, struct scheduler* scheduler)
   for (i = 0; i < PLAY_QUEUE_SIZE; i++)
     self->play_queue[i].player = self;
 
-  utils_dbg (PLR, "player initialized");
+  utils_dbg (PLR, "player initialized\n");
 
   return 0;
 }
@@ -312,7 +313,7 @@ player_cleanup (struct player* self)
 
   memset (self, 0, sizeof (struct player));
 
-  utils_dbg (PLR, "player destroyed");
+  utils_dbg (PLR, "player destroyed\n");
 }
 
 void
@@ -326,13 +327,13 @@ player_loop (struct player* self)
   bus = gst_pipeline_get_bus (GST_PIPELINE (self));
   gst_bus_add_watch (bus, (GstBusFunc) player_bus_watch, self);
 
-  utils_dbg (PLR, "Beginning playback");
+  utils_dbg (PLR, "Beginning playback\n");
   gst_element_set_state (self->pipeline, GST_STATE_PLAYING);
 
   g_main_loop_run (self->loop);
 
   gst_element_set_state (self->pipeline, GST_STATE_NULL);
-  utils_dbg (PLR, "Playback stopped");
+  utils_dbg (PLR, "Playback stopped\n");
 
   gst_bus_remove_watch (bus);
   g_object_unref (bus);
