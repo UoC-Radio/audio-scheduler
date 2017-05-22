@@ -18,6 +18,9 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#ifndef __UTILS_H__
+#define __UTILS_H__
+
 #include <stdarg.h>		/* For va_list handling */
 #include <time.h>		/* For time_t */
 
@@ -69,3 +72,5 @@ int utils_is_readable_file(char*filepath);
 void utils_trim_string(char* string);
 unsigned int utils_get_random_uint();
 int utils_compare_time(struct tm *tm1, struct tm* tm2, int no_date);
+
+#endif /* __UTILS_H__ */

@@ -18,6 +18,9 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#ifndef __SCHEDULER_H__
+#define __SCHEDULER_H__
+
 #include <time.h> /* For time_t */
 
 struct fader {
@@ -107,3 +110,5 @@ int cfg_reload_if_needed(struct config *cfg);
 int sched_get_next(struct scheduler* sched, char** next, struct fader** fader);
 int sched_init(struct scheduler* sched, char* config_filepath);
 void sched_cleanup(struct scheduler* sched);
+
+#endif /* __SCHEDULER_H__ */
