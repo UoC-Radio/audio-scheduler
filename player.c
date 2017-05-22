@@ -279,14 +279,28 @@ player_init (struct player* self, struct scheduler* scheduler)
   self->mixer = gst_element_factory_make ("audiomixer", NULL);
   sink = gst_element_factory_make ("autoaudiosink", NULL);
 
+  if (!self->mixer || !sink) {
+    utils_err (PLR, "Your GStreamer installation is missing required elements");
+    g_clear_object (&self->mixer);
+    g_clear_object (&sink);
+    player_cleanup (self);
+    return -1;
+  }
+
   gst_bin_add_many (GST_BIN (self->pipeline), self->mixer, sink, NULL);
-  gst_element_link (self->mixer, sink);
+  if (gst_element_link (self->mixer, sink) != GST_PAD_LINK_OK) {
+    utils_err (PLR, "Failed to link audiomixer to audio sink. Check caps");
+    player_cleanup (self);
+    return -1;
+  }
 
   /* initialize the player pointer in all items; this is needed for callbacks */
   for (i = 0; i < PLAY_QUEUE_SIZE; i++)
     self->play_queue[i].player = self;
 
   utils_dbg (PLR, "player initialized");
+
+  return 0;
 }
 
 void

@@ -33,7 +33,12 @@ main(int argc, char **argv)
 		return -1;
 	}
 
-	player_init(&player, &sched);
+	ret = player_init(&player, &sched);
+	if (ret < 0) {
+		utils_err(NONE, "Unable to initialize player\n");
+		sched_cleanup(&sched);
+		return -1;
+	}
 
 	/* Install signal handler */
 	/* Install a signal handler for graceful exit */
