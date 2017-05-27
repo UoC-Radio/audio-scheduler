@@ -121,8 +121,13 @@ mixer_sink_event (GstPad * pad, GstPadProbeInfo * info,
           GST_TIME_ARGS (next_sched_rt));
 
       item->player->sched_running_time = next_sched_rt;
+      item->player->sched_unix_time += end / GST_USECOND;
     }
     gst_object_unref (peer);
+
+    /* make sure we have enough items linked */
+    player_link_next_async (item->player);
+
   } else if (GST_EVENT_TYPE (event) == GST_EVENT_EOS) {
     /*
      * this item has finished playing, call link_next()
@@ -161,9 +166,6 @@ decodebin_pad_added (GstElement * decodebin, GstPad * pad,
   if (item->player->sched_running_time > 0) {
     gst_pad_set_offset (item->mixer_sink, item->player->sched_running_time);
   }
-
-  /* make sure we have enough items linked */
-  player_link_next_async (item->player);
 }
 
 /*
@@ -182,6 +184,7 @@ player_link_next (struct player * self)
   char *file;
   struct fader *fader;
   GError *error = NULL;
+  time_t sched_time_secs;
 
   /* check if the next item in the queue is available for recycling */
   item = &self->play_queue[self->play_queue_ptr];
@@ -195,9 +198,13 @@ player_link_next (struct player * self)
   /* release resources if they were previously on use */
   play_queue_item_cleanup (item);
 
+  /* time_t is in seconds, sched_unix_time is in microseconds */
+  sched_time_secs =
+      gst_util_uint64_scale (self->sched_unix_time, GST_USECOND, GST_SECOND);
+
 next:
   /* ask scheduler for the next item */
-  if (sched_get_next (self->scheduler, &file, &fader) != 0) {
+  if (sched_get_next (self->scheduler, &file, sched_time_secs, &fader) != 0) {
     utils_err (PLR, "No more files to play!!\n");
     return;
   }
@@ -432,6 +439,7 @@ player_loop (struct player* self)
   GstBus *bus;
   gint i;
 
+  self->sched_unix_time = g_get_real_time ();
   player_link_next (self);
 
   bus = gst_pipeline_get_bus (GST_PIPELINE (self->pipeline));

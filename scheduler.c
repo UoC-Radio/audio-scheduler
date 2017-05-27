@@ -27,9 +27,9 @@
 \*********/
 
 static int
-sched_is_ipls_ready(struct intermediate_playlist* ipls, time_t curr_time)
+sched_is_ipls_ready(struct intermediate_playlist* ipls, time_t sched_time)
 {
-	struct tm tm_curr = *localtime(&curr_time);
+	struct tm tm_curr = *localtime(&sched_time);
 	struct tm ipls_rdy_tm = *localtime(&ipls->last_scheduled);
 	int mins = ipls_rdy_tm.tm_min;
 	int ret = 0;
@@ -104,7 +104,7 @@ sched_get_next_item(struct playlist* pls)
  * then we can't do anything about it. */
 
 int
-sched_get_next(struct scheduler* sched, char** next, struct fader** fader)
+sched_get_next(struct scheduler* sched, char** next, time_t sched_time, struct fader** fader)
 {
 	struct playlist *pls = NULL;
 	struct intermediate_playlist *ipls = NULL;
@@ -114,11 +114,15 @@ sched_get_next(struct scheduler* sched, char** next, struct fader** fader)
 	int day = 0;
 	int i = 0;
 	int ret = 0;
-	time_t curr_time = time(NULL);
-	struct tm tm = *localtime(&curr_time);
+	struct tm tm = *localtime(&sched_time);
+	char datestr[26];
 
 	if (!sched)
 		return -1;
+
+	/* format: Day DD Mon YYYY, HH:MM:SS */
+	strftime (datestr, 26, "%a %d %b %Y, %H:%M:%S", &tm);
+	utils_info (SCHED, "Scheduling item for: %s\n", datestr);
 
 	/* Reload config if needed */
 	ret = cfg_reload_if_needed(sched->cfg);
@@ -151,7 +155,7 @@ sched_get_next(struct scheduler* sched, char** next, struct fader** fader)
 	 * playlists are sorted in descending order from higher
 	 * to lower priority. */
 	for(i = 0; i < zn->num_others && zn->others; i++) {
-		if(sched_is_ipls_ready(zn->others[i], curr_time)) {
+		if(sched_is_ipls_ready(zn->others[i], sched_time)) {
 			ipls = zn->others[i];
 			/* Only update last_scheduled after we've
 			 * scheduled num_sched_items */
@@ -161,7 +165,7 @@ sched_get_next(struct scheduler* sched, char** next, struct fader** fader)
 				/* Done with this one, mark it as scheduled
 				 * and move on to the next */
 				ipls->sched_items_pending = -1;
-				ipls->last_scheduled = curr_time;
+				ipls->last_scheduled = sched_time;
 				continue;
 			}
 			utils_dbg(SCHED, "Pending items: %i\n",
