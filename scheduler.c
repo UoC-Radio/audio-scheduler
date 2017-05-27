@@ -134,14 +134,14 @@ sched_get_next(struct scheduler* sched, char** next, struct fader** fader)
 	 * get the latest one and since the zones
 	 * are stored in ascending order, do
 	 * the lookup backwards */
-	for(i = ds->num_zones - 1; i > 0; i--) {
+	for(i = ds->num_zones - 1; i >= 0; i--) {
 		zn = ds->zones[i];
 		ret = utils_compare_time(&tm, &zn->start_time, 1);
 		if(ret > 0)
 			break;
 	}
 
-	if(i == 0) {
+	if(i < 0) {
 		utils_wrn(SCHED, "Nothing is scheduled for now ");
 		utils_wrn(SCHED|SKIP, "using first zone of the day\n");
 	}
