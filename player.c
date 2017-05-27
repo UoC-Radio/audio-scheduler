@@ -377,6 +377,8 @@ player_init (struct player* self, struct scheduler* scheduler)
   GstElement *sink;
   int i;
 
+  gst_init (NULL, NULL);
+
   self->scheduler = scheduler;
   self->loop = g_main_loop_new (NULL, FALSE);
   self->pipeline = gst_pipeline_new ("player");
