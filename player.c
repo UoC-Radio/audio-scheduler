@@ -429,7 +429,7 @@ player_loop (struct player* self)
 
   player_link_next (self);
 
-  bus = gst_pipeline_get_bus (GST_PIPELINE (self));
+  bus = gst_pipeline_get_bus (GST_PIPELINE (self->pipeline));
   gst_bus_add_watch (bus, (GstBusFunc) player_bus_watch, self);
 
   utils_dbg (PLR, "Beginning playback\n");
