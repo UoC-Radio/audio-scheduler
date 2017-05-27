@@ -394,7 +394,7 @@ player_init (struct player* self, struct scheduler* scheduler)
   }
 
   gst_bin_add_many (GST_BIN (self->pipeline), self->mixer, sink, NULL);
-  if (gst_element_link (self->mixer, sink) != GST_PAD_LINK_OK) {
+  if (!gst_element_link (self->mixer, sink)) {
     utils_err (PLR, "Failed to link audiomixer to audio sink. Check caps\n");
     player_cleanup (self);
     return -1;
