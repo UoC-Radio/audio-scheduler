@@ -50,7 +50,11 @@ struct player
 
   struct play_queue_item play_queue[PLAY_QUEUE_SIZE];
   gint play_queue_ptr;
-  GstClockTime previous_offset;
+
+  /* the running time at which the last item in the play queue is
+   * scheduled to start fading out, therefore the time at which
+   * the next item needs to start a fade in */
+  GstClockTime sched_running_time;
 };
 
 int player_init (struct player* self, struct scheduler* scheduler);
