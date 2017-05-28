@@ -78,61 +78,69 @@ mixer_sink_event (GstPad * pad, GstPadProbeInfo * info,
 {
   GstEvent *event = gst_pad_probe_info_get_event (info);
 
-  if (GST_EVENT_TYPE (event) == GST_EVENT_SEGMENT) {
-    /*
-     * We got a segment, so it's now safe to execute the duration query.
-     * The demuxer obviously knows this information at this time.
-     */
-    gint64 duration;
-    GstPad *peer;
+  switch (GST_EVENT_TYPE (event)) {
+    case GST_EVENT_SEGMENT:
+    {
+      /*
+       * We got a segment, so it's now safe to execute the duration query.
+       * The demuxer obviously knows this information at this time.
+       */
+      gint64 duration;
+      GstPad *peer;
 
-    peer = gst_pad_get_peer (pad);
-    if (gst_pad_query_duration (peer, GST_FORMAT_TIME, &duration)) {
-      const GstSegment *segment;
-      GstClockTime end, next_sched_rt;
+      peer = gst_pad_get_peer (pad);
+      if (gst_pad_query_duration (peer, GST_FORMAT_TIME, &duration)) {
+        const GstSegment *segment;
+        GstClockTime end, next_sched_rt;
 
-      utils_dbg (PLR, "item %p: duration is %" GST_TIME_FORMAT "\n", item,
-          GST_TIME_ARGS (duration));
-      if (item->fader.fadeout_duration_secs > 0) {
-        end = duration - item->fader.fadeout_duration_secs * GST_SECOND;
+        utils_dbg (PLR, "item %p: duration is %" GST_TIME_FORMAT "\n", item,
+            GST_TIME_ARGS (duration));
+        if (item->fader.fadeout_duration_secs > 0) {
+          end = duration - item->fader.fadeout_duration_secs * GST_SECOND;
 
-        /* the end of the fade out (and of the song) is equal to the duration
-         * of the stream, in stream time, so the start of the fade out is
-         * equal to the duration minus the fadeout duration */
-        play_queue_item_set_fade (item,
-            end, item->fader.max_lvl,
-            duration, item->fader.min_lvl);
-      } else {
-        end = duration;
+          /* the end of the fade out (and of the song) is equal to the duration
+           * of the stream, in stream time, so the start of the fade out is
+           * equal to the duration minus the fadeout duration */
+          play_queue_item_set_fade (item,
+              end, item->fader.max_lvl,
+              duration, item->fader.min_lvl);
+        } else {
+          end = duration;
+        }
+
+        gst_event_parse_segment (event, &segment);
+
+        next_sched_rt =
+            gst_segment_position_from_stream_time (segment, GST_FORMAT_TIME, end);
+        next_sched_rt =
+            gst_segment_to_running_time (segment, GST_FORMAT_TIME, next_sched_rt);
+
+        utils_dbg (PLR, "prev sched_running_time: %" GST_TIME_FORMAT
+            ", next: %" GST_TIME_FORMAT "\n",
+            GST_TIME_ARGS (item->player->sched_running_time),
+            GST_TIME_ARGS (next_sched_rt));
+
+        item->player->sched_running_time = next_sched_rt;
+        item->player->sched_unix_time += end / GST_USECOND;
       }
+      gst_object_unref (peer);
 
-      gst_event_parse_segment (event, &segment);
-
-      next_sched_rt =
-          gst_segment_position_from_stream_time (segment, GST_FORMAT_TIME, end);
-      next_sched_rt =
-          gst_segment_to_running_time (segment, GST_FORMAT_TIME, next_sched_rt);
-
-      utils_dbg (PLR, "prev sched_running_time: %" GST_TIME_FORMAT
-          ", next: %" GST_TIME_FORMAT "\n",
-          GST_TIME_ARGS (item->player->sched_running_time),
-          GST_TIME_ARGS (next_sched_rt));
-
-      item->player->sched_running_time = next_sched_rt;
-      item->player->sched_unix_time += end / GST_USECOND;
+      /* make sure we have enough items linked */
+      player_link_next_async (item->player);
+      break;
     }
-    gst_object_unref (peer);
-
-    /* make sure we have enough items linked */
-    player_link_next_async (item->player);
-
-  } else if (GST_EVENT_TYPE (event) == GST_EVENT_EOS) {
-    /*
-     * this item has finished playing, call link_next()
-     * to link another item in its place
-     */
-    g_atomic_int_set (&item->active, 0);
-    player_link_next_async (item->player);
+    case GST_EVENT_EOS:
+    {
+      /*
+       * this item has finished playing, call link_next()
+       * to link another item in its place
+       */
+      g_atomic_int_set (&item->active, 0);
+      player_link_next_async (item->player);
+      break;
+    }
+    default:
+      break;
   }
 
   return GST_PAD_PROBE_OK;
