@@ -222,7 +222,7 @@ player_link_next (struct player * self)
 
 next:
   /* ask scheduler for the next item */
-  if (sched_get_next (self->scheduler, &file, sched_time_secs, &fader) != 0) {
+  if (sched_get_next (self->scheduler, sched_time_secs, &file, &fader) != 0) {
     utils_err (PLR, "No more files to play!!\n");
     return;
   }

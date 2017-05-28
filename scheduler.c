@@ -104,7 +104,7 @@ sched_get_next_item(struct playlist* pls)
  * then we can't do anything about it. */
 
 int
-sched_get_next(struct scheduler* sched, char** next, time_t sched_time, struct fader** fader)
+sched_get_next(struct scheduler* sched, time_t sched_time, char** next, struct fader** fader)
 {
 	struct playlist *pls = NULL;
 	struct intermediate_playlist *ipls = NULL;
