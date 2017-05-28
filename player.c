@@ -46,7 +46,7 @@ play_queue_item_cleanup (struct play_queue_item * item)
   }
 }
 
-static GstControlBinding *
+static void
 play_queue_item_set_fade (struct play_queue_item * item,
     GstClockTime start, gdouble start_value, GstClockTime end,
     gdouble end_value)
@@ -70,8 +70,6 @@ play_queue_item_set_fade (struct play_queue_item * item,
   gst_object_add_control_binding (GST_OBJECT_CAST (item->mixer_sink),
       binding);
   gst_object_unref (cs);
-
-  return binding;
 }
 
 static GstPadProbeReturn
