@@ -21,7 +21,7 @@
 #define _XOPEN_SOURCE		/* Needed for strptime() */
 #include "scheduler.h"
 #include "utils.h"
-#include <string.h>
+#include <string.h>		/* For memset() / strncmp() */
 #include <time.h>		/* For strptime() and time() */
 #include <signal.h>		/* For sig_atomic_t */
 #include <libxml/parser.h>	/* For parser context etc */
@@ -108,7 +108,7 @@ cfg_get_boolean(xmlDocPtr config, xmlNodePtr element)
 static char*
 cfg_get_str_attr(xmlNodePtr element, const char* attr)
 {
-	char* value = (char*) xmlGetProp(element, attr);
+	char* value = (char*) xmlGetProp(element, (const xmlChar*) attr);
 	if(value == NULL) {
 		parser_failed = 1;
 		return NULL;
@@ -120,7 +120,7 @@ cfg_get_str_attr(xmlNodePtr element, const char* attr)
 static void
 cfg_get_start_attr(xmlDocPtr config, xmlNodePtr element, struct tm *time)
 {
-	char* time_string = (char*) xmlGetProp(element, "Start");
+	char* time_string = (char*) xmlGetProp(element, (const xmlChar*) "Start");
 	if(time_string == NULL) {
 		parser_failed = 1;
 		return;
@@ -399,8 +399,10 @@ cfg_get_ipls(xmlDocPtr config, xmlNodePtr ipls_node)
 
 	utils_info(CFG, "Got intermediate playlist: %s\n\tFile:%s\n\tShuffle: %s\n\t",
 		  ipls->name, ipls->filepath, ipls->shuffle ? "true" : "false");
-	utils_info(CFG|SKIP, "Fader: %s\n\tScheduling interval: %i\n\tItems to schedule: %i\n",
-		  ipls->fader ? "true" : "false", ipls->sched_interval_mins, ipls->num_sched_items);
+
+	utils_info(CFG|SKIP, "Fader: %s\n\tScheduling interval: %i\n\t"
+		   "Items to schedule: %i\n", ipls->fader ? "true" : "false",
+		   ipls->sched_interval_mins, ipls->num_sched_items);
 
 cleanup:
 	if(parser_failed) {
@@ -520,7 +522,8 @@ cfg_get_zone(xmlDocPtr config, xmlNodePtr zone_node)
 
 	utils_info(CFG, "Got zone: %s\n\tMaintainer: %s\n\tDescription: %s\n\t",
 		  zn->name, zn->maintainer, zn->description, zn->comment);
-	utils_info(CFG|SKIP, "Comment: %s\n\tnum_others: %i\n", zn->comment, zn->num_others);
+	utils_info(CFG|SKIP, "Comment: %s\n\tnum_others: %i\n", zn->comment,
+		   zn->num_others);
 
 cleanup:
 	if(parser_failed) {
@@ -630,15 +633,18 @@ cfg_get_day_schedule(xmlDocPtr config, xmlNodePtr ds_node)
 
 	/* At least a zone is needed */
 	if(!ds->num_zones) {
-		utils_err(CFG, "Got empty day schedule element (%s)\n", ds_node->name);
+		utils_err(CFG, "Got empty day schedule element (%s)\n",
+			  ds_node->name);
 		parser_failed = 1;
 		goto cleanup;
 	}
 
 	if(!got_start_of_day)
-		utils_wrn(CFG, "Nothing scheduled on 00:00:00 for %s\n", ds_node->name);
+		utils_wrn(CFG, "Nothing scheduled on 00:00:00 for %s\n",
+			  ds_node->name);
 
-	utils_info(CFG, "Got day schedule for %s, num_zones: %i\n", ds_node->name, ds->num_zones);
+	utils_info(CFG, "Got day schedule for %s, num_zones: %i\n",
+		   ds_node->name, ds->num_zones);
 
 cleanup:
 	if(parser_failed) {
@@ -745,8 +751,8 @@ cfg_print_validation_error_msg(void *ctx, const char *fmt, ...)
 }
 
 /* Linked-in config XSD schema file (config_schema.xsd)*/
-extern const unsigned char _binary_config_schema_xsd_start;
-extern const unsigned char _binary_config_schema_xsd_end;
+extern const char _binary_config_schema_xsd_start;
+extern const char _binary_config_schema_xsd_end;
 
 static int
 cfg_validate_against_schema(xmlDocPtr config)

@@ -263,7 +263,6 @@ utils_trim_string(char* string)
 {
 	char* start = NULL;
 	char* end = NULL;
-	char* res = NULL;
 	int len = strnlen(string, PATH_MAX);
 	int i = 0;
 
@@ -385,8 +384,9 @@ utils_is_regular_file(char* filepath)
 int
 utils_is_readable_file(char*filepath)
 {
-	int ret = 0;
 #ifndef TEST
+	int ret = 0;
+
 	if(!utils_is_regular_file(filepath))
 		return 0;
 
@@ -426,11 +426,10 @@ utils_compare_time(struct tm *tm1, struct tm* tm0, int no_date)
 	t1 = mktime(tm1);
 	t0 = mktime(tm0);
 	diff = difftime(t1, t0);
-	if(!diff)
-		return 0;
 	if(diff > 0.0L)
 		return 1;
-	if(diff < 0.0L)
+	else if(diff < 0.0L)
 		return -1;
-
+	else
+		return 0;
 }

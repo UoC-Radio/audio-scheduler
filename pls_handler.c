@@ -186,11 +186,9 @@ pls_process(struct playlist* pls)
 {
 	char line[PATH_MAX] = {0};
 	char* delim = NULL;
-	char** temp = NULL;
 	FILE *pls_file = NULL;
 	int type = 0;
 	int ret = 0;
-	int i = 0;
 
 	/* Sanity checks */
 	if(pls->filepath == NULL) {
