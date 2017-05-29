@@ -36,8 +36,6 @@
 	#endif
 #endif
 
-/* Not used for now */
-#define CRC_POLYNOMIAL	0x43
 
 /* Some codes for prety output on the terminal */
 #define NORMAL	"\x1B[0m"
