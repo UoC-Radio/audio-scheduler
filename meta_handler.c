@@ -93,6 +93,7 @@ meta_server_callback(struct meta_handler *mh, int sockfd)
 	struct tm *tm = NULL;
 	char date_str[64] = {0};
 	int len = 0;
+	int ret = 0;
 
 	/* Ignore input */
 	while(recv(sockfd, NULL, 0, MSG_TRUNC | MSG_OOB) > 0);
@@ -150,7 +151,9 @@ meta_server_callback(struct meta_handler *mh, int sockfd)
 			"Connection: Closed\r\n\r\n",
 			date_str, len);
 
-	write(sockfd, mh->msg_buff, len);
+	ret = write(sockfd, mh->msg_buff, len);
+	if(ret < 0 || ret != len)
+		utils_pwrn(META, "Write error");
 
 	shutdown(sockfd, SHUT_WR);
 

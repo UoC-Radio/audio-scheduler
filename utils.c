@@ -109,10 +109,16 @@ utils_get_facility_name(int facility)
 void
 utils_verr(int facility, const char* fmt, va_list args)
 {
-	char *msg;
+	char *msg = NULL;
+	int ret = 0;
+
 	if(log_level < ERROR)
 		return;
-	vasprintf(&msg, fmt, args);
+
+	ret = vasprintf(&msg, fmt, args);
+	if(ret < 0)
+		return;
+
 	fprintf(stderr, RED"%s%s"NORMAL,
 		utils_get_facility_name(facility), msg);
 	free(msg);
@@ -133,10 +139,16 @@ utils_err(int facility, const char* fmt,...)
 void
 utils_vperr(int facility, const char* fmt, va_list args)
 {
-	char *msg;
+	char *msg = NULL;
+	int ret = 0;
+
 	if(log_level < ERROR)
 		return;
-	vasprintf(&msg, fmt, args);
+
+	ret = vasprintf(&msg, fmt, args);
+	if(ret < 0)
+		return;
+
 	fprintf(stderr, RED"%s%s: %s"NORMAL"\n",
 		utils_get_facility_name(facility), msg, strerror(errno));
 	free(msg);
@@ -157,10 +169,16 @@ utils_perr(int facility, const char* fmt,...)
 void
 utils_vwrn(int facility, const char* fmt, va_list args)
 {
-	char *msg;
+	char *msg = NULL;
+	int ret = 0;
+
 	if(log_level < WARN)
 		return;
-	vasprintf(&msg, fmt, args);
+
+	ret = vasprintf(&msg, fmt, args);
+	if(ret < 0)
+		return;
+
 	fprintf(stderr, YELLOW"%s%s"NORMAL, utils_get_facility_name(facility), msg);
 	free(msg);
 }
@@ -180,10 +198,16 @@ utils_wrn(int facility, const char* fmt,...)
 void
 utils_vpwrn(int facility, const char* fmt, va_list args)
 {
-	char *msg;
+	char *msg = NULL;;
+	int ret = 0;
+
 	if(log_level < WARN)
 		return;
-	vasprintf(&msg, fmt, args);
+
+	ret = vasprintf(&msg, fmt, args);
+	if(ret < 0)
+		return;
+
 	fprintf(stderr, YELLOW"%s%s: %s"NORMAL"\n",
 		utils_get_facility_name(facility), msg, strerror(errno));
 	free(msg);
@@ -204,10 +228,16 @@ utils_pwrn(int facility, const char* fmt,...)
 void
 utils_vinfo(int facility, const char* fmt, va_list args)
 {
-	char *msg;
+	char *msg = NULL;
+	int ret = 0;
+
 	if(log_level < INFO)
 		return;
-	vasprintf(&msg, fmt, args);
+
+	ret = vasprintf(&msg, fmt, args);
+	if(ret < 0)
+		return;
+
 	printf(CYAN"%s%s"NORMAL, utils_get_facility_name(facility), msg);
 	free(msg);
 }
@@ -228,7 +258,8 @@ utils_info(int facility, const char* fmt,...)
 void
 utils_vdbg(int facility, const char* fmt, va_list args)
 {
-	char *msg;
+	char *msg = NULL;
+	int ret = 0;
 
 	if(log_level < DEBUG)
 		return;
@@ -236,7 +267,10 @@ utils_vdbg(int facility, const char* fmt, va_list args)
 	if(!(facility & debug_mask))
 		return;
 
-	vasprintf(&msg, fmt, args);
+	ret = vasprintf(&msg, fmt, args);
+	if(ret < 0)
+		return;
+
 	fprintf(stderr, MAGENTA"%s%s"NORMAL,
 		utils_get_facility_name(facility), msg);
 	free(msg);
