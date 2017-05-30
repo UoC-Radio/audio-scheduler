@@ -32,6 +32,7 @@ enum facilities {
 	PLS	= 0x10,
 	SHUF	= 0x12,
 	UTILS	= 0x14,
+	META	= 0x18,
 	SKIP	= 0x100,
 };
 

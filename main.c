@@ -1,5 +1,6 @@
 #include "scheduler.h"
 #include "player.h"
+#include "meta_handler.h"
 #include "utils.h"
 #include <unistd.h>	/* For sleep() */
 #include <signal.h>	/* For sig_atomic_t and signal handling */
@@ -17,6 +18,7 @@ main(int argc, char **argv)
 {
 	struct scheduler sched = {0};
 	struct sigaction sa = {0};
+	struct meta_handler mh = {0};
 	int ret = 0;
 
 	if (argc < 2) {
@@ -25,19 +27,27 @@ main(int argc, char **argv)
 	}
 
 	utils_set_log_level(DBG);
-	utils_set_debug_mask(CFG|PLS|PLR|SHUF|SCHED|UTILS);
+	utils_set_debug_mask(CFG|PLS|PLR|SHUF|SCHED|UTILS|META);
 
 	ret = sched_init(&sched, argv[1]);
 	if (ret < 0) {
 		utils_err(NONE, "Unable to initialize scheduler\n");
-		return -1;
+		ret = -1;
+		goto cleanup;
+	}
+
+	ret = meta_handler_init(&mh, 9670, NULL);
+	if (ret < 0) {
+		utils_err(NONE, "Unable to initialize metadata request hanlder\n");
+		ret = -2;
+		goto cleanup;
 	}
 
 	ret = player_init(&player, &sched);
 	if (ret < 0) {
 		utils_err(NONE, "Unable to initialize player\n");
-		sched_cleanup(&sched);
-		return -1;
+		ret = -3;
+		goto cleanup;
 	}
 
 	/* Install signal handler */
@@ -53,7 +63,10 @@ main(int argc, char **argv)
 	player_loop(&player);
 
 	utils_info(PLR, "Graceful exit...\n");
+
+ cleanup:
 	player_cleanup(&player);
 	sched_cleanup(&sched);
+	meta_handler_destroy(&mh);
 	return ret;
 }

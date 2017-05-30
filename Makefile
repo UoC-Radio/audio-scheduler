@@ -6,6 +6,7 @@ TARGET=audio-scheduler
 
 SRCS=cfg_handler.c \
      pls_handler.c \
+     meta_handler.c \
      player.c \
      utils.c \
      scheduler.c \
