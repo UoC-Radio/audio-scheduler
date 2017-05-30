@@ -23,6 +23,7 @@
 
 #include <stdarg.h>		/* For va_list handling */
 #include <time.h>		/* For time_t */
+#include "config.h"
 
 enum facilities {
 	NONE	= 0x0,
