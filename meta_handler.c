@@ -248,6 +248,7 @@ meta_handler_init(struct meta_handler *mh, uint16_t port, const char* ip4addr)
 	memset(mh, 0, sizeof(struct meta_handler));
 	mh->port = port;
 	mh->ipaddr = ip4addr;
+	pthread_mutex_init(&mh->state.proc_mutex, NULL);
 
 	/* Allocate output buffer */
 	mh->msg_buff = malloc(ST_STRING_LEN);
