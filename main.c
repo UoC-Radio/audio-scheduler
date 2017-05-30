@@ -27,7 +27,7 @@ main(int argc, char **argv)
 	}
 
 	utils_set_log_level(DBG);
-	utils_set_debug_mask(CFG|PLS|PLR|SHUF|SCHED|UTILS|META);
+	utils_set_debug_mask(PLR|SCHED|META);
 
 	ret = sched_init(&sched, argv[1]);
 	if (ret < 0) {

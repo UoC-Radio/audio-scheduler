@@ -282,7 +282,7 @@ pls_process(struct playlist* pls)
 		}
 	}
 
-	utils_info(PLS, "Got %i files from %s\n", pls->num_items, pls->filepath);
+	utils_dbg(PLS, "Got %i files from %s\n", pls->num_items, pls->filepath);
 
 cleanup:
 	if(pls_file)
@@ -309,7 +309,7 @@ pls_reload_if_needed(struct playlist* pls)
 	if(mtime == pls->last_mtime)
 		return 0;
 
-	utils_dbg(PLS, "Got different mtime, reloading %s\n", pls->filepath);
+	utils_info(PLS, "Got different mtime, reloading %s\n", pls->filepath);
 
 	/* Re-load playlist */
 	pls_files_cleanup(pls);

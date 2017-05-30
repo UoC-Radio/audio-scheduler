@@ -190,7 +190,7 @@ cfg_get_fader(xmlDocPtr config, xmlNodePtr fdr_node)
 		goto cleanup;
 	}
 
-	utils_info(CFG, "Got fader\n\tFade in duration (secs): %i\n\t"
+	utils_dbg(CFG, "Got fader\n\tFade in duration (secs): %i\n\t"
 			"Fade out duration (secs): %i\n\t"
 			"Minimum level: %g\n\t"
 			"Maximum level: %g\n",
@@ -277,7 +277,7 @@ cfg_get_pls(xmlDocPtr config, xmlNodePtr pls_node)
 		goto cleanup;	
 	}
 
-	utils_info(CFG, "Got playlist: %s\n\tShuffle: %s\n\tFader: %s\n",
+	utils_dbg(CFG, "Got playlist: %s\n\tShuffle: %s\n\tFader: %s\n",
 		   pls->filepath, pls->shuffle ? "true" : "false",
 		   pls->fader ? "true" : "false");
 
@@ -397,10 +397,10 @@ cfg_get_ipls(xmlDocPtr config, xmlNodePtr ipls_node)
 	ipls->sched_items_pending = ipls->num_sched_items;
 	ipls->last_scheduled = curr_time;
 
-	utils_info(CFG, "Got intermediate playlist: %s\n\tFile:%s\n\tShuffle: %s\n\t",
+	utils_dbg(CFG, "Got intermediate playlist: %s\n\tFile:%s\n\tShuffle: %s\n\t",
 		  ipls->name, ipls->filepath, ipls->shuffle ? "true" : "false");
 
-	utils_info(CFG|SKIP, "Fader: %s\n\tScheduling interval: %i\n\t"
+	utils_dbg(CFG|SKIP, "Fader: %s\n\tScheduling interval: %i\n\t"
 		   "Items to schedule: %i\n", ipls->fader ? "true" : "false",
 		   ipls->sched_interval_mins, ipls->num_sched_items);
 
@@ -520,9 +520,9 @@ cfg_get_zone(xmlDocPtr config, xmlNodePtr zone_node)
 		goto cleanup;
 	}
 
-	utils_info(CFG, "Got zone: %s\n\tMaintainer: %s\n\tDescription: %s\n\t",
+	utils_dbg(CFG, "Got zone: %s\n\tMaintainer: %s\n\tDescription: %s\n\t",
 		  zn->name, zn->maintainer, zn->description, zn->comment);
-	utils_info(CFG|SKIP, "Comment: %s\n\tnum_others: %i\n", zn->comment,
+	utils_dbg(CFG|SKIP, "Comment: %s\n\tnum_others: %i\n", zn->comment,
 		   zn->num_others);
 
 cleanup:
