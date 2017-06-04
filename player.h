@@ -32,7 +32,7 @@ struct play_queue_item
 {
   struct player *player;
 
-  gchar *uri;
+  gchar *file;
   struct fader fader;
 
   volatile gint active;

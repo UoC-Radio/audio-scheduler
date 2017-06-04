@@ -30,9 +30,10 @@ static void player_relink_current_async (struct player *self);
 static void
 play_queue_item_cleanup (struct play_queue_item * item)
 {
-  if (item->uri) {
+  if (item->file) {
     utils_dbg (PLR, "item %p: cleaning up\n", item);
-    g_free (item->uri);
+    g_free (item->file);
+    item->file = NULL;
     if (item->decodebin) {
       gst_element_set_locked_state (item->decodebin, TRUE);
       gst_element_set_state (item->decodebin, GST_STATE_NULL);
@@ -96,7 +97,7 @@ mixer_sink_event (GstPad * pad, GstPadProbeInfo * info,
                 duration <= 0)
       {
         utils_wrn (PLR, "item %p: unknown file duration, consider remuxing; "
-            "skipping playback: %s\n", item, item->uri);
+            "skipping playback: %s\n", item, item->file);
 
         /* schedule recycling this item */
         player_relink_current_async (item->player);
@@ -201,6 +202,7 @@ player_link_next (struct player * self)
   struct play_queue_item *item;
   char *file;
   struct fader *fader;
+  gchar *uri;
   GError *error = NULL;
   time_t sched_time_secs;
 
@@ -228,7 +230,7 @@ next:
   }
 
   /* convert to file:// URI */
-  item->uri = gst_filename_to_uri (file, &error);
+  uri = gst_filename_to_uri (file, &error);
   if (error) {
     utils_wrn (PLR, "Failed to convert filename '%s' to URI: %s\n", file,
         error->message);
@@ -236,9 +238,10 @@ next:
     goto next;
   }
 
+  item->file = g_strdup (file);
   g_atomic_int_set (&item->active, 1);
 
-  utils_dbg (PLR, "item %p: scheduling to play '%s'\n", item, item->uri);
+  utils_dbg (PLR, "item %p: scheduling to play '%s'\n", item, uri);
 
   /* configure fade properties */
   if (fader) {
@@ -251,12 +254,13 @@ next:
   /* create the decodebin and link it */
   item->decodebin = gst_element_factory_make ("uridecodebin", NULL);
   gst_util_set_object_arg (G_OBJECT (item->decodebin), "caps", "audio/x-raw");
-  g_object_set (item->decodebin, "uri", item->uri, NULL);
+  g_object_set (item->decodebin, "uri", uri, NULL);
   g_signal_connect (item->decodebin, "pad-added",
       (GCallback) decodebin_pad_added, item);
   gst_bin_add (GST_BIN (self->pipeline), item->decodebin);
   gst_element_sync_state_with_parent (item->decodebin);
 
+  g_free (uri);
   /* continued async in decodebin_pad_added */
 }
 
