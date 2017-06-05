@@ -32,9 +32,17 @@ struct play_queue_item
 {
   struct player *player;
 
+  /* info we got from the scheduler */
   gchar *file;
   struct fader fader;
 
+  /* info we discovered; rt = running time */
+  guint64 duration;
+  GstClockTime start_rt;
+  GstClockTime fadeout_rt;
+  GstClockTime end_rt;
+
+  /* operational variables */
   volatile gint active;
   GstElement *decodebin;
   GstPad *mixer_sink;
@@ -50,11 +58,6 @@ struct player
 
   struct play_queue_item play_queue[PLAY_QUEUE_SIZE];
   gint play_queue_ptr;
-
-  /* the running time at which the last item in the play queue is
-   * scheduled to start fading out, therefore the time at which
-   * the next item needs to start a fade in */
-  GstClockTime sched_running_time;
 
   /* the same as sched_running_time, but expressed in UNIX time,
    * i.e. the time elapsed since the Epoch.

@@ -27,6 +27,24 @@
 static void player_link_next_async (struct player *self);
 static void player_relink_current_async (struct player *self);
 
+static struct play_queue_item *
+play_queue_get_next (struct player *self)
+{
+  gint ptr = self->play_queue_ptr;
+  if (++ptr >= PLAY_QUEUE_SIZE)
+    ptr = 0;
+  return &self->play_queue[ptr];
+}
+
+static struct play_queue_item *
+play_queue_get_previous (struct player *self)
+{
+  gint ptr = self->play_queue_ptr;
+  if (--ptr < 0)
+    ptr = PLAY_QUEUE_SIZE - 1;
+  return &self->play_queue[ptr];
+}
+
 static void
 play_queue_item_cleanup (struct play_queue_item * item)
 {
@@ -90,7 +108,7 @@ mixer_sink_event (GstPad * pad, GstPadProbeInfo * info,
       gint64 duration;
       GstPad *peer;
       const GstSegment *segment;
-      GstClockTime end, next_sched_rt;
+      GstClockTime fadeout, end;
 
       peer = gst_pad_get_peer (pad);
       if (!gst_pad_query_duration (peer, GST_FORMAT_TIME, &duration) ||
@@ -108,34 +126,40 @@ mixer_sink_event (GstPad * pad, GstPadProbeInfo * info,
       }
       gst_object_unref (peer);
 
-      utils_dbg (PLR, "item %p: duration is %" GST_TIME_FORMAT "\n", item,
-          GST_TIME_ARGS (duration));
-      if (item->fader.fadeout_duration_secs > 0) {
-        end = duration - item->fader.fadeout_duration_secs * GST_SECOND;
+      /* schedule fade in */
+      if (item->fader.fadein_duration_secs > 0) {
+        play_queue_item_set_fade (item, 0, item->fader.min_lvl,
+            item->fader.fadein_duration_secs * GST_SECOND, item->fader.max_lvl);
+      }
 
-        /* the end of the fade out (and of the song) is equal to the duration
-          * of the stream, in stream time, so the start of the fade out is
-          * equal to the duration minus the fadeout duration */
-        play_queue_item_set_fade (item,
-            end, item->fader.max_lvl,
-            duration, item->fader.min_lvl);
-      } else {
+      /* schedule fade out */
+      if (item->fader.fadeout_duration_secs > 0) {
         end = duration;
+        fadeout = end - item->fader.fadeout_duration_secs * GST_SECOND;
+
+        play_queue_item_set_fade (item, fadeout, item->fader.max_lvl,
+            end, item->fader.min_lvl);
+      } else {
+        fadeout = end = duration;
       }
 
       gst_event_parse_segment (event, &segment);
 
-      next_sched_rt =
-          gst_segment_position_from_stream_time (segment, GST_FORMAT_TIME, end);
-      next_sched_rt =
-          gst_segment_to_running_time (segment, GST_FORMAT_TIME, next_sched_rt);
+      item->duration = duration;
+      item->fadeout_rt = gst_segment_to_running_time (segment, GST_FORMAT_TIME,
+          gst_segment_position_from_stream_time (segment, GST_FORMAT_TIME,
+              fadeout));
+      item->end_rt = gst_segment_to_running_time (segment, GST_FORMAT_TIME,
+          gst_segment_position_from_stream_time (segment, GST_FORMAT_TIME,
+              end));
 
-      utils_dbg (PLR, "prev sched_running_time: %" GST_TIME_FORMAT
-          ", next: %" GST_TIME_FORMAT "\n",
-          GST_TIME_ARGS (item->player->sched_running_time),
-          GST_TIME_ARGS (next_sched_rt));
+      utils_dbg (PLR, "item %p: duration is %" GST_TIME_FORMAT "\n", item,
+          GST_TIME_ARGS (duration));
+      utils_dbg (PLR, "\tfadeout starts at running time: %" GST_TIME_FORMAT "\n",
+          GST_TIME_ARGS (item->fadeout_rt));
+      utils_dbg (PLR, "\titem ends at running time: %" GST_TIME_FORMAT "\n",
+          GST_TIME_ARGS (item->end_rt));
 
-      item->player->sched_running_time = next_sched_rt;
       item->player->sched_unix_time += end / GST_USECOND;
 
       /* make sure we have enough items linked */
@@ -163,6 +187,9 @@ static void
 decodebin_pad_added (GstElement * decodebin, GstPad * pad,
     struct play_queue_item * item)
 {
+  GstClockTime offset = 0;
+  struct play_queue_item *previous = play_queue_get_previous (item->player);
+
   /* link the pad to a sink of the mixer and add a probe there to peek events */
   item->mixer_sink =
       gst_element_get_request_pad (item->player->mixer, "sink_%u");
@@ -170,21 +197,23 @@ decodebin_pad_added (GstElement * decodebin, GstPad * pad,
       (GstPadProbeCallback) mixer_sink_event, item, NULL);
   gst_pad_link (pad, item->mixer_sink);
 
-  utils_dbg (PLR, "item %p: decodebin pad added, linked to %s:%s, offset %"
+  /* start mixing this stream in the future; if there is a fade in,
+   * start at the time the previous stream starts fading out,
+   * otherwise start at the end of the previous stream */
+  if (previous->end_rt > 0) {
+    if (item->fader.fadein_duration_secs > 0)
+      offset = previous->fadeout_rt;
+    else
+      offset = previous->end_rt;
+
+    gst_pad_set_offset (item->mixer_sink, offset);
+  }
+
+  item->start_rt = offset;
+
+  utils_dbg (PLR, "item %p: decodebin pad added, linked to %s:%s, start_rt: %"
       GST_TIME_FORMAT "\n", item, GST_DEBUG_PAD_NAME (item->mixer_sink),
-      GST_TIME_ARGS (item->player->sched_running_time));
-
-  /* schedule fade in */
-  if (item->fader.fadein_duration_secs > 0) {
-    play_queue_item_set_fade (item, 0, item->fader.min_lvl,
-        item->fader.fadein_duration_secs * GST_SECOND, item->fader.max_lvl);
-  }
-
-  /* start mixing this stream in the future, at the time the previous stream
-   * starts fading out */
-  if (item->player->sched_running_time > 0) {
-    gst_pad_set_offset (item->mixer_sink, item->player->sched_running_time);
-  }
+      GST_TIME_ARGS (item->start_rt));
 }
 
 /*
@@ -207,7 +236,7 @@ player_link_next (struct player * self)
   time_t sched_time_secs;
 
   /* check if the next item in the queue is available for recycling */
-  item = &self->play_queue[self->play_queue_ptr];
+  item = play_queue_get_next (self);
   if (g_atomic_int_get (&item->active))
     return;
 
@@ -286,11 +315,13 @@ player_relink_current (struct player *self)
 {
   struct play_queue_item *item;
 
-  /* go back one item in the play queue and mark it as inactive */
-  if (--self->play_queue_ptr < 0)
-    self->play_queue_ptr = PLAY_QUEUE_SIZE - 1;
+  /* mark the current item as inactive */
   item = &self->play_queue[self->play_queue_ptr];
   g_atomic_int_set (&item->active, 0);
+
+  /* go back one item in the play queue */
+  if (--self->play_queue_ptr < 0)
+    self->play_queue_ptr = PLAY_QUEUE_SIZE - 1;
 
   /* then call player_link_next() to recycle it */
   player_link_next (self);
@@ -382,9 +413,9 @@ player_bus_watch (GstBus *bus, GstMessage *msg, struct player *self)
         gint ptr;
         struct play_queue_item *item;
 
-        ptr = self->play_queue_ptr;
-        if (--ptr < 0)
-          ptr = PLAY_QUEUE_SIZE - 1;
+        ptr = self->play_queue_ptr - i;
+        if (ptr < 0)
+          ptr = PLAY_QUEUE_SIZE - ptr;
         item = &self->play_queue[ptr];
 
         if (item->decodebin && gst_object_has_as_ancestor (GST_MESSAGE_SRC (msg),
@@ -392,7 +423,7 @@ player_bus_watch (GstBus *bus, GstMessage *msg, struct player *self)
         {
           if (i == 0) {
             /*
-             * i == 0 --> we decreased play_queue_ptr by 1, so this is the
+             * i == 0 --> we decreased play_queue_ptr by 0, so this is the
              * item that we linked last; for this case we can recover by
              * getting the next file in that play queue slot
              */
