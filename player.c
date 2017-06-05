@@ -466,9 +466,10 @@ player_bus_watch (GstBus *bus, GstMessage *msg, struct player *self)
 }
 
 int
-player_init (struct player* self, struct scheduler* scheduler)
+player_init (struct player* self, struct scheduler* scheduler,
+    const char *audiosink)
 {
-  GstElement *sink;
+  GstElement *sink = NULL;
   int i;
 
   gst_init (NULL, NULL);
@@ -477,7 +478,11 @@ player_init (struct player* self, struct scheduler* scheduler)
   self->loop = g_main_loop_new (NULL, FALSE);
   self->pipeline = gst_pipeline_new ("player");
   self->mixer = gst_element_factory_make ("audiomixer", NULL);
-  sink = gst_element_factory_make ("autoaudiosink", NULL);
+  if (audiosink)
+    sink = gst_element_factory_make (audiosink, NULL);
+
+  if (!sink)
+    sink = gst_element_factory_make ("autoaudiosink", NULL);
 
   if (!self->mixer || !sink) {
     utils_err (PLR, "Your GStreamer installation is missing required elements\n");

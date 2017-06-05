@@ -22,7 +22,7 @@ main(int argc, char **argv)
 	int ret = 0;
 
 	if (argc < 2) {
-		utils_info(NONE, "Usage: %s <config_file>\n", argv[0]);
+		utils_info(NONE, "Usage: %s <config_file> <gst audio sink>\n", argv[0]);
 		return(0);
 	}
 
@@ -43,7 +43,7 @@ main(int argc, char **argv)
 		goto cleanup;
 	}
 
-	ret = player_init(&player, &sched);
+	ret = player_init(&player, &sched, (argc > 2) ? argv[2] : NULL);
 	if (ret < 0) {
 		utils_err(NONE, "Unable to initialize player\n");
 		ret = -3;

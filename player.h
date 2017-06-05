@@ -66,7 +66,8 @@ struct player
   guint64 sched_unix_time;
 };
 
-int player_init (struct player* self, struct scheduler* scheduler);
+int player_init (struct player* self, struct scheduler* scheduler,
+    const char *audiosink);
 void player_cleanup (struct player* self);
 
 void player_loop (struct player* self);
