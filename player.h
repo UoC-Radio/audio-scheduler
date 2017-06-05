@@ -45,6 +45,7 @@ struct play_queue_item
   /* operational variables */
   volatile gint active;
   GstElement *decodebin;
+  GstElement *audioconvert;
   GstPad *mixer_sink;
 };
 

@@ -58,6 +58,12 @@ play_queue_item_cleanup (struct play_queue_item * item)
       gst_bin_remove (GST_BIN (item->player->pipeline), item->decodebin);
       item->decodebin = NULL;
     }
+    if (item->audioconvert) {
+      gst_element_set_locked_state (item->audioconvert, TRUE);
+      gst_element_set_state (item->audioconvert, GST_STATE_NULL);
+      gst_bin_remove (GST_BIN (item->player->pipeline), item->audioconvert);
+      item->audioconvert = NULL;
+    }
     if (item->mixer_sink) {
       gst_element_release_request_pad (item->player->mixer, item->mixer_sink);
       gst_object_unref (item->mixer_sink);
@@ -189,13 +195,28 @@ decodebin_pad_added (GstElement * decodebin, GstPad * pad,
 {
   GstClockTime offset = 0;
   struct play_queue_item *previous = play_queue_get_previous (item->player);
+  GstPad *cvrt_src, *cvrt_sink;
 
   /* link the pad to a sink of the mixer and add a probe there to peek events */
   item->mixer_sink =
       gst_element_get_request_pad (item->player->mixer, "sink_%u");
   gst_pad_add_probe (item->mixer_sink, GST_PAD_PROBE_TYPE_EVENT_DOWNSTREAM,
       (GstPadProbeCallback) mixer_sink_event, item, NULL);
-  gst_pad_link (pad, item->mixer_sink);
+
+  /* plug audioconvert in between;
+   * audiomixer cannot handle different formats on different sink pads */
+  item->audioconvert = gst_element_factory_make ("audioconvert", NULL);
+  gst_bin_add (GST_BIN (item->player->pipeline), item->audioconvert);
+  gst_element_sync_state_with_parent (item->audioconvert);
+
+  cvrt_src = gst_element_get_static_pad (item->audioconvert, "src");
+  cvrt_sink = gst_element_get_static_pad (item->audioconvert, "sink");
+
+  gst_pad_link (cvrt_src, item->mixer_sink);
+  gst_pad_link (pad, cvrt_sink);
+
+  gst_object_unref (cvrt_src);
+  gst_object_unref (cvrt_sink);
 
   /* start mixing this stream in the future; if there is a fade in,
    * start at the time the previous stream starts fading out,
@@ -470,6 +491,7 @@ player_init (struct player* self, struct scheduler* scheduler,
     const char *audiosink)
 {
   GstElement *sink = NULL;
+  GstElement *convert = NULL;
   int i;
 
   gst_init (NULL, NULL);
@@ -478,21 +500,23 @@ player_init (struct player* self, struct scheduler* scheduler,
   self->loop = g_main_loop_new (NULL, FALSE);
   self->pipeline = gst_pipeline_new ("player");
   self->mixer = gst_element_factory_make ("audiomixer", NULL);
+  convert = gst_element_factory_make ("audioconvert", NULL);
   if (audiosink)
     sink = gst_element_factory_make (audiosink, NULL);
 
   if (!sink)
     sink = gst_element_factory_make ("autoaudiosink", NULL);
 
-  if (!self->mixer || !sink) {
+  if (!self->mixer || !convert || !sink) {
     utils_err (PLR, "Your GStreamer installation is missing required elements\n");
     g_clear_object (&self->mixer);
+    g_clear_object (&convert);
     g_clear_object (&sink);
     return -1;
   }
 
-  gst_bin_add_many (GST_BIN (self->pipeline), self->mixer, sink, NULL);
-  if (!gst_element_link (self->mixer, sink)) {
+  gst_bin_add_many (GST_BIN (self->pipeline), self->mixer, convert, sink, NULL);
+  if (!gst_element_link_many (self->mixer, convert, sink, NULL)) {
     utils_err (PLR, "Failed to link audiomixer to audio sink. Check caps\n");
     return -1;
   }
