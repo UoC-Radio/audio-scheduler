@@ -488,14 +488,12 @@ player_init (struct player* self, struct scheduler* scheduler,
     utils_err (PLR, "Your GStreamer installation is missing required elements\n");
     g_clear_object (&self->mixer);
     g_clear_object (&sink);
-    player_cleanup (self);
     return -1;
   }
 
   gst_bin_add_many (GST_BIN (self->pipeline), self->mixer, sink, NULL);
   if (!gst_element_link (self->mixer, sink)) {
     utils_err (PLR, "Failed to link audiomixer to audio sink. Check caps\n");
-    player_cleanup (self);
     return -1;
   }
 
@@ -511,7 +509,8 @@ player_init (struct player* self, struct scheduler* scheduler,
 void
 player_cleanup (struct player* self)
 {
-  gst_element_set_state (self->pipeline, GST_STATE_NULL);
+  if (self->pipeline)
+    gst_element_set_state (self->pipeline, GST_STATE_NULL);
   g_clear_object (&self->pipeline);
   g_clear_pointer (&self->loop, g_main_loop_unref);
 
