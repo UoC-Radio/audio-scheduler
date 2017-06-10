@@ -501,8 +501,14 @@ player_init (struct player* self, struct scheduler* scheduler,
   self->pipeline = gst_pipeline_new ("player");
   self->mixer = gst_element_factory_make ("audiomixer", NULL);
   convert = gst_element_factory_make ("audioconvert", NULL);
-  if (audiosink)
-    sink = gst_element_factory_make (audiosink, NULL);
+  if (audiosink) {
+    GError *error = NULL;
+    sink = gst_parse_bin_from_description (audiosink, TRUE, &error);
+    if (error)
+      utils_wrn (PLR, "Failed to parse audiosink description: %s\n",
+          error->message);
+    g_clear_error (&error);
+  }
 
   if (!sink)
     sink = gst_element_factory_make ("autoaudiosink", NULL);
