@@ -68,8 +68,8 @@ pls_files_cleanup_internal(char** files, int num_files)
 	free(files);
 }
 
-static char**
-pls_add_file(char* filepath, char **files, int *num_files)
+static int
+pls_add_file(char* filepath, char ***files, int *num_files)
 {
 	int len = 0;
 	int ret = 0;
@@ -98,26 +98,26 @@ pls_add_file(char* filepath, char **files, int *num_files)
 	}
 	memcpy(file, filepath, len);
 
-	temp = realloc(files, ((*num_files) + 1) * sizeof(char*));
+	temp = realloc(*files, ((*num_files) + 1) * sizeof(char*));
 	if(!temp) {
 		utils_err(PLS, "Could not expand files array\n");
 		free(file);
 		ret = -1;
 		goto cleanup;
 	}
-	files = temp;
+	*files = temp;
 
-	files[(*num_files)] = file;
-	utils_dbg(PLS, "Added file: %s\n", files[(*num_files)]);
+	(*files)[(*num_files)] = file;
+	utils_dbg(PLS, "Added file: %s\n", (*files)[(*num_files)]);
 	(*num_files)++;
 
 cleanup:
 	if(ret < 0) {
-		pls_files_cleanup_internal(files, (*num_files));
+		pls_files_cleanup_internal(*files, (*num_files));
 		(*num_files) = 0;
-		files = NULL;
+		*files = NULL;
 	}
-	return files;
+	return ret;
 }
 
 
@@ -244,8 +244,8 @@ pls_process(struct playlist* pls)
 			delim = strchr(line, '=');
 			delim++;
 
-			pls->items = pls_add_file(delim, pls->items, &pls->num_items);
-			if(!pls->items) {
+			ret = pls_add_file(delim, &pls->items, &pls->num_items);
+			if(ret < 0) {
 				ret = -1;
 				goto cleanup;
 			}
@@ -260,8 +260,8 @@ pls_process(struct playlist* pls)
 			delim = strchr(line, '=');
 			delim++;
 
-			pls->items = pls_add_file(line, pls->items, &pls->num_items);
-			if(!pls->items) {
+			ret = pls_add_file(line, &pls->items, &pls->num_items);
+			if(ret < 0) {
 				ret = -1;
 				goto cleanup;
 			}
