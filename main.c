@@ -2,10 +2,15 @@
 #include "player.h"
 #include "meta_handler.h"
 #include "utils.h"
-#include <unistd.h>	/* For sleep() */
+#include <unistd.h>	/* For getopt() */
 #include <signal.h>	/* For sig_atomic_t and signal handling */
+#include <stdlib.h>	/* For strtol() */
+#include <stdio.h>	/* For perror() */
 
 static struct player player = {0};
+
+static const char * usage_str =
+  "Usage: %s [-s audio_sink_bin] [-d debug_level] [-m debug_mask] <config_file>\n";
 
 static void
 signal_handler(int sig, siginfo_t * info, void *extra)
@@ -19,17 +24,45 @@ main(int argc, char **argv)
 	struct scheduler sched = {0};
 	struct sigaction sa = {0};
 	struct meta_handler mh = {0};
-	int ret = 0;
+	int ret = 0, opt, tmp;
+	int dbg_lvl = DBG;
+	int dbg_mask = PLR|SCHED|META;
+	char *sink = NULL;
 
-	if (argc < 2) {
-		utils_info(NONE, "Usage: %s <config_file> <gst audio sink>\n", argv[0]);
+	while ((opt = getopt(argc, argv, "s:d:m:")) != -1) {
+		switch (opt) {
+		case 's':
+			sink = optarg;
+			break;
+		case 'd':
+			tmp = strtol(optarg, NULL, 10);
+			if (errno != 0)
+				perror("Failed to parse debug level");
+			else
+				dbg_lvl = tmp;
+			break;
+		case 'm':
+			tmp = strtol(optarg, NULL, 16);
+			if (errno != 0)
+				perror("Failed to parse debug mask");
+			else
+				dbg_mask = tmp;
+			break;
+		default:
+			printf(usage_str, argv[0]);
+			return(0);
+		}
+	}
+
+	if (optind >= argc) {
+		printf(usage_str, argv[0]);
 		return(0);
 	}
 
-	utils_set_log_level(DBG);
-	utils_set_debug_mask(PLR|SCHED|META);
+	utils_set_log_level(dbg_lvl);
+	utils_set_debug_mask(dbg_mask);
 
-	ret = sched_init(&sched, argv[1]);
+	ret = sched_init(&sched, argv[optind]);
 	if (ret < 0) {
 		utils_err(NONE, "Unable to initialize scheduler\n");
 		ret = -1;
@@ -43,7 +76,7 @@ main(int argc, char **argv)
 		goto cleanup;
 	}
 
-	ret = player_init(&player, &sched, (argc > 2) ? argv[2] : NULL);
+	ret = player_init(&player, &sched, sink);
 	if (ret < 0) {
 		utils_err(NONE, "Unable to initialize player\n");
 		ret = -3;
