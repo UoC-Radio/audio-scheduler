@@ -1,2 +1,15 @@
-audio-scheduler
-config_schema.o
+audio_scheduler
+
+# autocrap
+configure
+stamp*
+*.o
+Makefile
+Makefile.in
+build-aux
+autom4te.cache
+config.h*
+config.log
+config.status
+.deps
+aclocal.m4
