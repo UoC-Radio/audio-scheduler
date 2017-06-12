@@ -214,7 +214,7 @@ sched_get_next(struct scheduler* sched, time_t sched_time, char** next,
 
 done:
 	if((*next) != NULL) {
-		utils_dbg(SCHED, "Got next item: %s (fader: %s)\n",
+		utils_info(SCHED, "Got next item: %s (fader: %s)\n",
 			  (*next), (*fader) ? "true" : "false");
 		return 0;
 	}
