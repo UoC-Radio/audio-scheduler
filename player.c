@@ -205,7 +205,8 @@ decodebin_pad_added (GstElement * decodebin, GstPad * pad,
 
   /* plug audioconvert in between;
    * audiomixer cannot handle different formats on different sink pads */
-  item->audioconvert = gst_element_factory_make ("audioconvert", NULL);
+  item->audioconvert = gst_parse_bin_from_description (
+      "audioconvert ! audioresample", TRUE, NULL);
   gst_bin_add (GST_BIN (item->player->pipeline), item->audioconvert);
   gst_element_sync_state_with_parent (item->audioconvert);
 
