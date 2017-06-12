@@ -261,7 +261,7 @@ utils_vdbg(int facility, const char* fmt, va_list args)
 	char *msg = NULL;
 	int ret = 0;
 
-	if(log_level < DEBUG)
+	if(log_level < DBG)
 		return;
 
 	if(!(facility & debug_mask))
@@ -280,7 +280,7 @@ void
 utils_dbg(int facility, const char* fmt,...)
 {
 	va_list args;
-	if(log_level < DEBUG)
+	if(log_level < DBG)
 		return;
 	va_start(args, fmt);
 	utils_vdbg(facility, fmt, args);
