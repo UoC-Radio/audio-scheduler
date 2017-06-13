@@ -121,6 +121,7 @@ utils_verr(int facility, const char* fmt, va_list args)
 
 	fprintf(stderr, RED"%s%s"NORMAL,
 		utils_get_facility_name(facility), msg);
+	fflush(stderr);
 	free(msg);
 }
 
@@ -151,6 +152,7 @@ utils_vperr(int facility, const char* fmt, va_list args)
 
 	fprintf(stderr, RED"%s%s: %s"NORMAL"\n",
 		utils_get_facility_name(facility), msg, strerror(errno));
+	fflush(stderr);
 	free(msg);
 }
 
@@ -180,6 +182,7 @@ utils_vwrn(int facility, const char* fmt, va_list args)
 		return;
 
 	fprintf(stderr, YELLOW"%s%s"NORMAL, utils_get_facility_name(facility), msg);
+	fflush(stderr);
 	free(msg);
 }
 
@@ -210,6 +213,7 @@ utils_vpwrn(int facility, const char* fmt, va_list args)
 
 	fprintf(stderr, YELLOW"%s%s: %s"NORMAL"\n",
 		utils_get_facility_name(facility), msg, strerror(errno));
+	fflush(stderr);
 	free(msg);
 }
 
@@ -239,6 +243,7 @@ utils_vinfo(int facility, const char* fmt, va_list args)
 		return;
 
 	printf(CYAN"%s%s"NORMAL, utils_get_facility_name(facility), msg);
+	fflush(stdout);
 	free(msg);
 }
 
@@ -273,6 +278,7 @@ utils_vdbg(int facility, const char* fmt, va_list args)
 
 	fprintf(stderr, MAGENTA"%s%s"NORMAL,
 		utils_get_facility_name(facility), msg);
+	fflush(stderr);
 	free(msg);
 }
 
