@@ -43,22 +43,25 @@ struct play_queue_item
   GstClockTime end_rt;
 
   /* operational variables */
-  volatile gint active;
   GstElement *decodebin;
   GstElement *audioconvert;
   GstPad *mixer_sink;
+
+  struct play_queue_item *previous;
+  struct play_queue_item *next;
 };
 
 struct player
 {
+  /* external objects */
   struct scheduler *scheduler;
 
+  /* internal objects */
   GMainLoop *loop;
   GstElement *pipeline;
   GstElement *mixer;
 
-  struct play_queue_item play_queue[PLAY_QUEUE_SIZE];
-  gint play_queue_ptr;
+  struct play_queue_item *playlist;
 
   /* the same as sched_running_time, but expressed in UNIX time,
    * i.e. the time elapsed since the Epoch.
