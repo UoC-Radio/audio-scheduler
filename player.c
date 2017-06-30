@@ -127,8 +127,6 @@ decodebin_pad_added (GstElement * decodebin, GstPad * pad,
   GstPad *cvrt_src, *cvrt_sink;
 
   /* link the pad to a sink of the mixer and add probes */
-  item->mixer_sink =
-      gst_element_get_request_pad (item->player->mixer, "sink_%u");
   gst_pad_add_probe (item->mixer_sink,
       GST_PAD_PROBE_TYPE_BUFFER | GST_PAD_PROBE_TYPE_BLOCK,
       (GstPadProbeCallback) mixer_sink_buffer, item, NULL);
@@ -223,6 +221,10 @@ next:
       (GCallback) decodebin_pad_added, item);
   gst_bin_add (GST_BIN (self->pipeline), item->decodebin);
   gst_element_sync_state_with_parent (item->decodebin);
+
+  /* construct in the main thread so that refresh_metadata() doesn't race */
+  item->mixer_sink =
+      gst_element_get_request_pad (item->player->mixer, "sink_%u");
 
   g_free (uri);
   return item;
@@ -433,9 +435,82 @@ player_bus_watch (GstBus *bus, GstMessage *msg, struct player *self)
   return G_SOURCE_CONTINUE;
 }
 
+static void
+populate_song_info (struct play_queue_item * item, struct song_info * song)
+{
+  GstEvent *tag_event;
+  GstTagList *taglist = NULL;
+  gint64 pos = GST_CLOCK_TIME_NONE;
+
+  /* cleanup song_info */
+  g_clear_pointer (&song->path, g_free);
+  g_clear_pointer (&song->artist, g_free);
+  g_clear_pointer (&song->album, g_free);
+  g_clear_pointer (&song->title, g_free);
+  song->duration_sec = song->elapsed_sec = 0;
+
+  if (!item)
+    return;
+
+  song->path = g_strdup (item->file);
+
+  tag_event = gst_pad_get_sticky_event (item->mixer_sink, GST_EVENT_TAG, 0);
+  if (tag_event)
+    gst_event_parse_tag (tag_event, &taglist);
+
+  if (taglist) {
+    gst_tag_list_get_string (taglist, GST_TAG_ARTIST, &song->artist);
+    gst_tag_list_get_string (taglist, GST_TAG_ALBUM, &song->album);
+    gst_tag_list_get_string (taglist, GST_TAG_TITLE, &song->title);
+  }
+
+  if (gst_pad_peer_query_position (item->mixer_sink, GST_FORMAT_TIME, &pos))
+    song->elapsed_sec =
+        (uint32_t) gst_util_uint64_scale_round (pos, 1, GST_SECOND);
+  song->duration_sec =
+      (uint32_t) gst_util_uint64_scale_round (item->duration, 1, GST_SECOND);
+
+  if (tag_event)
+    gst_event_unref (tag_event);
+}
+
+static gboolean
+refresh_metadata (struct player * self)
+{
+  struct current_state *mstate;
+
+  mstate = meta_get_state (self->mh);
+  pthread_mutex_lock (&mstate->proc_mutex);
+
+  populate_song_info (self->playlist, &mstate->current);
+  populate_song_info (self->playlist->next, &mstate->next);
+
+  if (self->playlist->next)
+    mstate->overlap_sec = self->playlist->next->fader.fadein_duration_secs;
+
+  pthread_mutex_unlock (&mstate->proc_mutex);
+
+  return G_SOURCE_CONTINUE;
+}
+
+static void
+cleanup_metadata (struct meta_handler *mh)
+{
+  struct current_state *mstate;
+
+  mstate = meta_get_state (mh);
+  pthread_mutex_lock (&mstate->proc_mutex);
+
+  populate_song_info (NULL, &mstate->current);
+  populate_song_info (NULL, &mstate->next);
+  mstate->overlap_sec = 0;
+
+  pthread_mutex_unlock (&mstate->proc_mutex);
+}
+
 int
 player_init (struct player* self, struct scheduler* scheduler,
-    const char *audiosink)
+    struct meta_handler *mh, const char *audiosink)
 {
   GstElement *sink = NULL;
   GstElement *convert = NULL;
@@ -443,6 +518,7 @@ player_init (struct player* self, struct scheduler* scheduler,
   gst_init (NULL, NULL);
 
   self->scheduler = scheduler;
+  self->mh = mh;
   self->loop = g_main_loop_new (NULL, FALSE);
   self->pipeline = gst_pipeline_new ("player");
   self->mixer = gst_element_factory_make ("audiomixer", NULL);
@@ -493,12 +569,15 @@ void
 player_loop (struct player* self)
 {
   GstBus *bus;
+  guint timeout_id;
 
   self->sched_unix_time = g_get_real_time ();
   self->playlist = play_queue_item_new (self, NULL);
 
   bus = gst_pipeline_get_bus (GST_PIPELINE (self->pipeline));
   gst_bus_add_watch (bus, (GstBusFunc) player_bus_watch, self);
+
+  timeout_id = g_timeout_add_seconds (1, (GSourceFunc) refresh_metadata, self);
 
   utils_dbg (PLR, "Beginning playback\n");
   gst_element_set_state (self->pipeline, GST_STATE_PLAYING);
@@ -507,6 +586,9 @@ player_loop (struct player* self)
 
   gst_element_set_state (self->pipeline, GST_STATE_NULL);
   utils_dbg (PLR, "Playback stopped\n");
+
+  g_source_remove (timeout_id);
+  cleanup_metadata (self->mh);
 
   gst_bus_remove_watch (bus);
   g_object_unref (bus);

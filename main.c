@@ -76,7 +76,7 @@ main(int argc, char **argv)
 		goto cleanup;
 	}
 
-	ret = player_init(&player, &sched, sink);
+	ret = player_init(&player, &sched, &mh, sink);
 	if (ret < 0) {
 		utils_err(NONE, "Unable to initialize player\n");
 		ret = -3;

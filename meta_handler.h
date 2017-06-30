@@ -18,6 +18,9 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#ifndef __META_HANDLER_H__
+#define __META_HANDLER_H__
+
 #include <stdint.h>	/* For typed ints */
 #include <pthread.h>	/* For pthread stuff */
 #include <linux/limits.h>	/* For PATH_MAX */
@@ -61,3 +64,5 @@ struct meta_handler {
 int meta_handler_init(struct meta_handler *mh, uint16_t port, const char* ip4addr);
 void meta_handler_destroy(struct meta_handler *mh);
 struct current_state* meta_get_state(struct meta_handler *mh);
+
+#endif /* __META_HANDLER_H__ */

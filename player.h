@@ -22,6 +22,7 @@
 #define __PLAYER_H__
 
 #include "scheduler.h"
+#include "meta_handler.h"
 #include <gst/gst.h>
 
 #define PLAY_QUEUE_SIZE 3
@@ -55,6 +56,7 @@ struct player
 {
   /* external objects */
   struct scheduler *scheduler;
+  struct meta_handler *mh;
 
   /* internal objects */
   GMainLoop *loop;
@@ -71,7 +73,7 @@ struct player
 };
 
 int player_init (struct player* self, struct scheduler* scheduler,
-    const char *audiosink);
+    struct meta_handler *mh, const char *audiosink);
 void player_cleanup (struct player* self);
 
 void player_loop (struct player* self);
