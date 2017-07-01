@@ -218,6 +218,9 @@ next:
     item->fader.fadeout_duration_secs = 0;
   }
 
+  /* construct in the main thread so that refresh_metadata() doesn't race */
+  item->mixer_sink = gst_element_get_request_pad (self->mixer, "sink_%u");
+
   /* create the decodebin and link it */
   item->decodebin = gst_element_factory_make ("uridecodebin", NULL);
   gst_util_set_object_arg (G_OBJECT (item->decodebin), "caps", "audio/x-raw");
@@ -226,10 +229,6 @@ next:
       (GCallback) decodebin_pad_added, item);
   gst_bin_add (GST_BIN (self->pipeline), item->decodebin);
   gst_element_sync_state_with_parent (item->decodebin);
-
-  /* construct in the main thread so that refresh_metadata() doesn't race */
-  item->mixer_sink =
-      gst_element_get_request_pad (item->player->mixer, "sink_%u");
 
   g_free (uri);
   return item;
