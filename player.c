@@ -36,31 +36,29 @@ mixer_sink_buffer (GstPad * pad, GstPadProbeInfo * info,
     struct play_queue_item * item)
 {
   gint64 duration;
-  GstPad *peer;
   GstEvent *event;
   const GstSegment *segment;
   GstClockTime fadeout, end;
 
-  peer = gst_pad_get_peer (pad);
-  if (!gst_pad_query_duration (peer, GST_FORMAT_TIME, &duration) ||
+  if (!gst_pad_query_duration (pad, GST_FORMAT_TIME, &duration) ||
             duration <= 0)
   {
     utils_wrn (PLR, "item %p: unknown file duration, consider remuxing; "
         "skipping playback: %s\n", item, item->file);
 
-    /* schedule recycling this item */
-    g_idle_add ((GSourceFunc) player_recycle_item, item);
-
-    /* we are going to remove the block to allow the main thread to dispose
-     * of this item, but we don't want to accidentally hear 1-2 buffers
-     * in the output, so let's mute this audiomixer pad */
-    g_object_set (item->mixer_sink, "mute", TRUE, NULL);
+    /* Here we unlink the pad from the audiomixer because letting the buffer
+     * go in the GstAggregator (parent class of audiomixer) may cause some
+     * locking on this thread, which will delay freeing this item and may block
+     * the main thread for significant time.
+     * As a side-effect, this causes an ERROR GstMessage, which gets posted
+     * on the bus and we recycle the item from the handler of the message,
+     * in a similar way we do when another error occurs (for example, when
+     * a decoder is missing) */
+    gst_pad_unlink (pad, item->mixer_sink);
 
     /* and now get out of here */
-    gst_object_unref (peer);
     return GST_PAD_PROBE_REMOVE;
   }
-  gst_object_unref (peer);
 
   /* schedule fade in */
   if (item->fader.fadein_duration_secs > 0) {
@@ -79,7 +77,7 @@ mixer_sink_buffer (GstPad * pad, GstPadProbeInfo * info,
     fadeout = end = duration;
   }
 
-  event = gst_pad_get_sticky_event (pad, GST_EVENT_SEGMENT, 0);
+  event = gst_pad_get_sticky_event (item->mixer_sink, GST_EVENT_SEGMENT, 0);
   gst_event_parse_segment (event, &segment);
 
   item->duration = duration;
@@ -131,13 +129,6 @@ decodebin_pad_added (GstElement * decodebin, GstPad * pad,
   GstClockTime offset = 0;
   GstPad *cvrt_src, *cvrt_sink;
 
-  /* link the pad to a sink of the mixer and add probes */
-  gst_pad_add_probe (item->mixer_sink,
-      GST_PAD_PROBE_TYPE_BUFFER | GST_PAD_PROBE_TYPE_BLOCK,
-      (GstPadProbeCallback) mixer_sink_buffer, item, NULL);
-  gst_pad_add_probe (item->mixer_sink, GST_PAD_PROBE_TYPE_EVENT_DOWNSTREAM,
-      (GstPadProbeCallback) mixer_sink_event, item, NULL);
-
   /* plug audioconvert in between;
    * audiomixer cannot handle different formats on different sink pads */
   item->audioconvert = gst_parse_bin_from_description (
@@ -153,6 +144,13 @@ decodebin_pad_added (GstElement * decodebin, GstPad * pad,
 
   gst_object_unref (cvrt_src);
   gst_object_unref (cvrt_sink);
+
+  /* link the pad to a sink of the mixer and add probes */
+  gst_pad_add_probe (cvrt_src,
+      GST_PAD_PROBE_TYPE_BUFFER | GST_PAD_PROBE_TYPE_BLOCK,
+      (GstPadProbeCallback) mixer_sink_buffer, item, NULL);
+  gst_pad_add_probe (item->mixer_sink, GST_PAD_PROBE_TYPE_EVENT_DOWNSTREAM,
+      (GstPadProbeCallback) mixer_sink_event, item, NULL);
 
   /* start mixing this stream in the future; if there is a fade in,
    * start at the time the previous stream starts fading out,
@@ -412,6 +410,10 @@ player_bus_watch (GstBus *bus, GstMessage *msg, struct player *self)
 
         player_recycle_item (item);
 
+        /* ensure the pipeline is PLAYING state;
+         * error messages tamper with it */
+        gst_element_set_state (self->pipeline, GST_STATE_PLAYING);
+
       } else if (self->playlist->next && gst_object_has_as_ancestor (
                 GST_MESSAGE_SRC (msg),
                 GST_OBJECT (self->playlist->decodebin))) {
@@ -427,6 +429,10 @@ player_bus_watch (GstBus *bus, GstMessage *msg, struct player *self)
         play_queue_item_free (self->playlist->next);
         self->playlist->next = NULL;
         player_recycle_item (self->playlist);
+
+        /* ensure the pipeline is PLAYING state;
+         * error messages tamper with it */
+        gst_element_set_state (self->pipeline, GST_STATE_PLAYING);
 
       } else {
         utils_err (PLR, "error originated from a critical element; "
