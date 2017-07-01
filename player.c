@@ -298,6 +298,8 @@ player_recycle_item (struct play_queue_item * item)
   struct player * self = item->player;
   struct play_queue_item ** ptr;
 
+  utils_dbg (PLR, "recycling item %p\n", item);
+
   /* this can happen when the very first loaded item fails to play
    * and we want to recycle it, otherwise normally it's the ->next
    * item that we recycle */
@@ -319,6 +321,8 @@ static gboolean
 player_handle_item_eos (struct play_queue_item * item)
 {
   struct player * self = item->player;
+
+  utils_dbg (PLR, "item %p EOS\n", item);
 
   if (G_UNLIKELY (item == self->playlist->next)) {
     utils_wrn (PLR, "next item finished before the current; corrupt file?\n");
