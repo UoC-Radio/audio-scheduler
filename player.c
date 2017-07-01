@@ -51,9 +51,14 @@ mixer_sink_buffer (GstPad * pad, GstPadProbeInfo * info,
     /* schedule recycling this item */
     g_idle_add ((GSourceFunc) player_recycle_item, item);
 
-    /* and get out of here, but keep the block... */
+    /* we are going to remove the block to allow the main thread to dispose
+     * of this item, but we don't want to accidentally hear 1-2 buffers
+     * in the output, so let's mute this audiomixer pad */
+    g_object_set (item->mixer_sink, "mute", TRUE, NULL);
+
+    /* and now get out of here */
     gst_object_unref (peer);
-    return GST_PAD_PROBE_OK;
+    return GST_PAD_PROBE_REMOVE;
   }
   gst_object_unref (peer);
 
