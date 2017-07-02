@@ -434,6 +434,15 @@ player_bus_watch (GstBus *bus, GstMessage *msg, struct player *self)
          * error messages tamper with it */
         gst_element_set_state (self->pipeline, GST_STATE_PLAYING);
 
+      } else if (!gst_object_has_as_ancestor (GST_MESSAGE_SRC (msg),
+                GST_OBJECT (self->pipeline))) {
+        /*
+         * this is an element that we have already removed from the pipeline.
+         * this can happen for example when a decodebin posts 2 errors in a row
+         */
+        utils_info (PLR, "error message originated from already removed item; "
+            "ignoring\n");
+
       } else {
         utils_err (PLR, "error originated from a critical element; "
           "the pipeline cannot continue working, sorry!\n");
