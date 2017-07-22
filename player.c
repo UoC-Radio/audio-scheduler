@@ -32,7 +32,7 @@ static gboolean player_recycle_item (struct play_queue_item * item);
 static gboolean player_handle_item_eos (struct play_queue_item * item);
 
 static GstPadProbeReturn
-mixer_sink_buffer (GstPad * pad, GstPadProbeInfo * info,
+itembin_srcpad_buffer_probe (GstPad * pad, GstPadProbeInfo * info,
     struct play_queue_item * item)
 {
   gint64 duration;
@@ -105,7 +105,7 @@ mixer_sink_buffer (GstPad * pad, GstPadProbeInfo * info,
 }
 
 static GstPadProbeReturn
-mixer_sink_event (GstPad * pad, GstPadProbeInfo * info,
+mixer_sinkpad_event_probe (GstPad * pad, GstPadProbeInfo * info,
     struct play_queue_item * item)
 {
   GstEvent *event = gst_pad_probe_info_get_event (info);
@@ -123,52 +123,9 @@ mixer_sink_event (GstPad * pad, GstPadProbeInfo * info,
 }
 
 static void
-decodebin_pad_added (GstElement * decodebin, GstPad * pad,
-    struct play_queue_item * item)
+decodebin_pad_added (GstElement * decodebin, GstPad * src, GstPad * sink)
 {
-  GstClockTime offset = 0;
-  GstPad *cvrt_src, *cvrt_sink;
-
-  /* plug audioconvert in between;
-   * audiomixer cannot handle different formats on different sink pads */
-  item->audioconvert = gst_parse_bin_from_description (
-      "audioconvert ! audioresample", TRUE, NULL);
-  gst_bin_add (GST_BIN (item->player->pipeline), item->audioconvert);
-  gst_element_sync_state_with_parent (item->audioconvert);
-
-  cvrt_src = gst_element_get_static_pad (item->audioconvert, "src");
-  cvrt_sink = gst_element_get_static_pad (item->audioconvert, "sink");
-
-  gst_pad_link (cvrt_src, item->mixer_sink);
-  gst_pad_link (pad, cvrt_sink);
-
-  gst_object_unref (cvrt_src);
-  gst_object_unref (cvrt_sink);
-
-  /* link the pad to a sink of the mixer and add probes */
-  gst_pad_add_probe (cvrt_src,
-      GST_PAD_PROBE_TYPE_BUFFER | GST_PAD_PROBE_TYPE_BLOCK,
-      (GstPadProbeCallback) mixer_sink_buffer, item, NULL);
-  gst_pad_add_probe (item->mixer_sink, GST_PAD_PROBE_TYPE_EVENT_DOWNSTREAM,
-      (GstPadProbeCallback) mixer_sink_event, item, NULL);
-
-  /* start mixing this stream in the future; if there is a fade in,
-   * start at the time the previous stream starts fading out,
-   * otherwise start at the end of the previous stream */
-  if (item->previous && item->previous->end_rt > 0) {
-    if (item->fader.fadein_duration_secs > 0)
-      offset = item->previous->fadeout_rt;
-    else
-      offset = item->previous->end_rt;
-
-    gst_pad_set_offset (item->mixer_sink, offset);
-  }
-
-  item->start_rt = offset;
-
-  utils_dbg (PLR, "item %p: decodebin pad added, linked to %s:%s, start_rt: %"
-      GST_TIME_FORMAT "\n", item, GST_DEBUG_PAD_NAME (item->mixer_sink),
-      GST_TIME_ARGS (item->start_rt));
+  gst_pad_link (src, sink);
 }
 
 static struct play_queue_item *
@@ -180,6 +137,11 @@ play_queue_item_new (struct player * self, struct play_queue_item * previous)
   gchar *uri;
   GError *error = NULL;
   time_t sched_time_secs;
+  GstElement *decodebin;
+  GstElement *audioconvert;
+  GstPad *convert_src, *convert_sink;
+  GstPad *ghost;
+  GstClockTime offset = 0;
 
   /* time_t is in seconds, sched_unix_time is in microseconds */
   sched_time_secs =
@@ -216,17 +178,62 @@ next:
     item->fader.fadeout_duration_secs = 0;
   }
 
-  /* construct in the main thread so that refresh_metadata() doesn't race */
-  item->mixer_sink = gst_element_get_request_pad (self->mixer, "sink_%u");
+  item->bin = gst_bin_new (NULL);
+  gst_bin_add (GST_BIN (self->pipeline), item->bin);
 
   /* create the decodebin and link it */
-  item->decodebin = gst_element_factory_make ("uridecodebin", NULL);
-  gst_util_set_object_arg (G_OBJECT (item->decodebin), "caps", "audio/x-raw");
-  g_object_set (item->decodebin, "uri", uri, NULL);
-  g_signal_connect (item->decodebin, "pad-added",
-      (GCallback) decodebin_pad_added, item);
-  gst_bin_add (GST_BIN (self->pipeline), item->decodebin);
-  gst_element_sync_state_with_parent (item->decodebin);
+  decodebin = gst_element_factory_make ("uridecodebin", NULL);
+  gst_util_set_object_arg (G_OBJECT (decodebin), "caps", "audio/x-raw");
+  g_object_set (decodebin, "uri", uri, NULL);
+  gst_bin_add (GST_BIN (item->bin), decodebin);
+
+  /* plug audioconvert in between;
+   * audiomixer cannot handle different formats on different sink pads */
+  audioconvert = gst_parse_bin_from_description (
+      "audioconvert ! audioresample", TRUE, NULL);
+  gst_bin_add (GST_BIN (item->bin), audioconvert);
+
+  /* link the audioconvert bin's src pad to the audiomixer's sink */
+  item->mixer_sink = gst_element_get_request_pad (self->mixer, "sink_%u");
+
+  convert_src = gst_element_get_static_pad (audioconvert, "src");
+  ghost = gst_ghost_pad_new ("src", convert_src);
+  gst_element_add_pad (item->bin, ghost);
+  gst_pad_link (ghost, item->mixer_sink);
+  gst_object_unref (convert_src);
+
+  /* and the decodebin's src pad to the audioconvert bin's sink */
+  convert_sink = gst_element_get_static_pad (audioconvert, "sink");
+  g_signal_connect_object (decodebin, "pad-added",
+      (GCallback) decodebin_pad_added, convert_sink, 0);
+  gst_object_unref (convert_sink);
+
+  /* link the pad to a sink of the mixer and add probes */
+  gst_pad_add_probe (ghost,
+      GST_PAD_PROBE_TYPE_BUFFER | GST_PAD_PROBE_TYPE_BLOCK,
+      (GstPadProbeCallback) itembin_srcpad_buffer_probe, item, NULL);
+  gst_pad_add_probe (item->mixer_sink, GST_PAD_PROBE_TYPE_EVENT_DOWNSTREAM,
+      (GstPadProbeCallback) mixer_sinkpad_event_probe, item, NULL);
+
+  /* start mixing this stream in the future; if there is a fade in,
+   * start at the time the previous stream starts fading out,
+   * otherwise start at the end of the previous stream */
+  if (item->previous && item->previous->end_rt > 0) {
+    if (item->fader.fadein_duration_secs > 0)
+      offset = item->previous->fadeout_rt;
+    else
+      offset = item->previous->end_rt;
+
+    gst_pad_set_offset (item->mixer_sink, offset);
+  }
+
+  item->start_rt = offset;
+
+  gst_element_sync_state_with_parent (item->bin);
+
+  utils_dbg (PLR, "item %p: created, linked to %s:%s, start_rt: %"
+      GST_TIME_FORMAT "\n", item, GST_DEBUG_PAD_NAME (item->mixer_sink),
+      GST_TIME_ARGS (item->start_rt));
 
   g_free (uri);
   return item;
@@ -239,15 +246,10 @@ play_queue_item_free (struct play_queue_item * item)
 
   g_free (item->file);
 
-  gst_element_set_locked_state (item->decodebin, TRUE);
-  gst_element_set_state (item->decodebin, GST_STATE_NULL);
-  gst_bin_remove (GST_BIN (item->player->pipeline), item->decodebin);
+  gst_element_set_locked_state (item->bin, TRUE);
+  gst_element_set_state (item->bin, GST_STATE_NULL);
+  gst_bin_remove (GST_BIN (item->player->pipeline), item->bin);
 
-  if (item->audioconvert) {
-    gst_element_set_locked_state (item->audioconvert, TRUE);
-    gst_element_set_state (item->audioconvert, GST_STATE_NULL);
-    gst_bin_remove (GST_BIN (item->player->pipeline), item->audioconvert);
-  }
   if (item->mixer_sink) {
     gst_element_release_request_pad (item->player->mixer, item->mixer_sink);
     gst_object_unref (item->mixer_sink);
@@ -396,17 +398,17 @@ player_bus_watch (GstBus *bus, GstMessage *msg, struct player *self)
         g_free (debug);
       }
 
-      /* check if the message came from a decodebin and attempt to recover;
+      /* check if the message came from an item's bin and attempt to recover;
        * it is possible to get an error there, in case of an unsupported
        * codec for example, or maybe a file read error... */
       if (gst_object_has_as_ancestor (GST_MESSAGE_SRC (msg),
-                GST_OBJECT (item->decodebin))) {
+                GST_OBJECT (item->bin))) {
         /*
          * this is the last item in the queue; for this case we can recover
          * by calling the recycle function
          */
         utils_info (PLR, "error message originated from the next "
-              "item's decodebin; recycling item\n");
+              "item's bin; recycling item\n");
 
         player_recycle_item (item);
 
@@ -416,7 +418,7 @@ player_bus_watch (GstBus *bus, GstMessage *msg, struct player *self)
 
       } else if (self->playlist->next && gst_object_has_as_ancestor (
                 GST_MESSAGE_SRC (msg),
-                GST_OBJECT (self->playlist->decodebin))) {
+                GST_OBJECT (self->playlist->bin))) {
         /*
          * this is the decodebin of the currently playing item, but we
          * have already linked the next item; no graceful recover here...
@@ -424,7 +426,7 @@ player_bus_watch (GstBus *bus, GstMessage *msg, struct player *self)
          * there *will* be an audio glitch here.
          */
         utils_info (PLR, "error message originated from the current "
-            "item's decodebin; recycling the whole playlist\n");
+            "item's bin; recycling the whole playlist\n");
 
         play_queue_item_free (self->playlist->next);
         self->playlist->next = NULL;

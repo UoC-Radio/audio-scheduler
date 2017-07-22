@@ -44,8 +44,7 @@ struct play_queue_item
   GstClockTime end_rt;
 
   /* operational variables */
-  GstElement *decodebin;
-  GstElement *audioconvert;
+  GstElement *bin;
   GstPad *mixer_sink;
 
   struct play_queue_item *previous;
