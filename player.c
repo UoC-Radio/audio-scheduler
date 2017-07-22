@@ -159,14 +159,20 @@ calculate_sched_time (GstClockTime start_rt, GstElement * pipeline)
 
   /* unless we are to start NOW... */
   if (start_rt != 0) {
+    GstClock *clock = gst_pipeline_get_clock (GST_PIPELINE (pipeline));
     base_time = gst_element_get_base_time (pipeline);
 
-    /* if base_time is zero, the pipeline has not started yet, so now = 0 */
-    if (base_time != 0) {
-      GstClock *clock = gst_pipeline_get_clock (GST_PIPELINE (pipeline));
+    if (clock) {
       now = gst_clock_get_time (clock) - base_time;
       gst_object_unref (clock);
     }
+
+    /* if the pipeline is not PLAYING yet and it's using the system clock,
+     * gst_clock_get_time() will return an incredibly high value, while
+     * base_time will be 0 and 'now' will end up weird. Just set it to 0
+     * in this case, as this is the actual time (pipeline not started yet) */
+    if (now > start_rt)
+      now = 0;
   }
 
   /* sched_unix_time is expressed in microseconds since the Epoch */
