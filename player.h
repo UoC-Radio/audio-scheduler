@@ -64,12 +64,6 @@ struct player
   GstElement *mixer;
 
   struct play_queue_item *playlist;
-
-  /* the same as sched_running_time, but expressed in UNIX time,
-   * i.e. the time elapsed since the Epoch.
-   * The unit here is microseconds, to avoid losing time after
-   * accumulating the duration of several audio files */
-  guint64 sched_unix_time;
 };
 
 int player_init (struct player* self, struct scheduler* scheduler,

@@ -121,8 +121,6 @@ itembin_srcpad_buffer_probe (GstPad * pad, GstPadProbeInfo * info,
   utils_dbg (PLR, "\titem ends at running time: %" GST_TIME_FORMAT "\n",
       GST_TIME_ARGS (item->end_rt));
 
-  item->player->sched_unix_time += end / GST_USECOND;
-
   /* make sure we have enough items linked */
   g_idle_add ((GSourceFunc) player_ensure_next, item->player);
 
@@ -153,6 +151,31 @@ decodebin_pad_added (GstElement * decodebin, GstPad * src, GstPad * sink)
   gst_pad_link (src, sink);
 }
 
+static time_t
+calculate_sched_time (GstClockTime start_rt, GstElement * pipeline)
+{
+  gint64 sched_unix_time;
+  GstClockTime base_time, now = 0;
+
+  /* unless we are to start NOW... */
+  if (start_rt != 0) {
+    base_time = gst_element_get_base_time (pipeline);
+
+    /* if base_time is zero, the pipeline has not started yet, so now = 0 */
+    if (base_time != 0) {
+      GstClock *clock = gst_pipeline_get_clock (GST_PIPELINE (pipeline));
+      now = gst_clock_get_time (clock) - base_time;
+      gst_object_unref (clock);
+    }
+  }
+
+  /* sched_unix_time is expressed in microseconds since the Epoch */
+  sched_unix_time = g_get_real_time () + GST_TIME_AS_USECONDS (start_rt - now);
+
+  /* time_t is in seconds, sched_unix_time is in microseconds */
+  return gst_util_uint64_scale (sched_unix_time, GST_USECOND, GST_SECOND);
+}
+
 static struct play_queue_item *
 play_queue_item_new (struct player * self, struct play_queue_item * previous)
 {
@@ -161,19 +184,21 @@ play_queue_item_new (struct player * self, struct play_queue_item * previous)
   gchar *file;
   gchar *uri;
   GError *error = NULL;
-  time_t sched_time_secs;
+  time_t sched_time;
   GstElement *decodebin;
   GstElement *audioconvert;
   GstPad *queue_src, *convert_sink, *ghost;
   GstClockTime offset = 0;
 
-  /* time_t is in seconds, sched_unix_time is in microseconds */
-  sched_time_secs =
-      gst_util_uint64_scale (self->sched_unix_time, GST_USECOND, GST_SECOND);
+  /* ask for the item that would start exactly at the end of the previous item;
+   * note that in reality this item may start earlier than the requested time,
+   * if it has a fade in, but at this point we don't really care */
+  sched_time = calculate_sched_time (previous ? previous->end_rt : 0,
+      self->pipeline);
 
 next:
   /* ask scheduler for the next item */
-  if (sched_get_next (self->scheduler, sched_time_secs, &file, &fader) != 0) {
+  if (sched_get_next (self->scheduler, sched_time, &file, &fader) != 0) {
     utils_err (PLR, "No more files to play!!\n");
     return NULL;
   }
@@ -262,7 +287,6 @@ next:
 
     gst_pad_set_offset (item->mixer_sink, offset);
   }
-
   item->start_rt = offset;
 
   gst_element_sync_state_with_parent (item->bin);
@@ -629,7 +653,6 @@ player_loop (struct player* self)
   GstBus *bus;
   guint timeout_id;
 
-  self->sched_unix_time = g_get_real_time ();
   self->playlist = play_queue_item_new (self, NULL);
 
   bus = gst_pipeline_get_bus (GST_PIPELINE (self->pipeline));
