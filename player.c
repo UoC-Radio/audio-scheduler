@@ -172,6 +172,11 @@ calculate_sched_time (GstClockTime start_rt, GstElement * pipeline)
   /* sched_unix_time is expressed in microseconds since the Epoch */
   sched_unix_time = g_get_real_time () + GST_TIME_AS_USECONDS (start_rt - now);
 
+  utils_dbg (PLR, "calc sched time: start_rt %" GST_TIME_FORMAT
+      ", now %" GST_TIME_FORMAT ", sched time %" GST_TIME_FORMAT "\n",
+      GST_TIME_ARGS (start_rt), GST_TIME_ARGS (now),
+      GST_TIME_ARGS (sched_unix_time * GST_USECOND));
+
   /* time_t is in seconds, sched_unix_time is in microseconds */
   return gst_util_uint64_scale (sched_unix_time, GST_USECOND, GST_SECOND);
 }
