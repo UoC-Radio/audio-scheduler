@@ -45,6 +45,7 @@ struct play_queue_item
 
   /* operational variables */
   GstElement *bin;
+  GstElement *queue;
   GstPad *mixer_sink;
 
   struct play_queue_item *previous;

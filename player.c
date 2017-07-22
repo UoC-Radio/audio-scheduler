@@ -43,21 +43,46 @@ itembin_srcpad_buffer_probe (GstPad * pad, GstPadProbeInfo * info,
   if (!gst_pad_query_duration (pad, GST_FORMAT_TIME, &duration) ||
             duration <= 0)
   {
-    utils_wrn (PLR, "item %p: unknown file duration, consider remuxing; "
-        "skipping playback: %s\n", item, item->file);
+    gint threshold, max_buffers;
 
-    /* Here we unlink the pad from the audiomixer because letting the buffer
-     * go in the GstAggregator (parent class of audiomixer) may cause some
-     * locking on this thread, which will delay freeing this item and may block
-     * the main thread for significant time.
-     * As a side-effect, this causes an ERROR GstMessage, which gets posted
-     * on the bus and we recycle the item from the handler of the message,
-     * in a similar way we do when another error occurs (for example, when
-     * a decoder is missing) */
-    gst_pad_unlink (pad, item->mixer_sink);
+    g_object_get (item->queue, "max-size-buffers", &max_buffers,
+        "min-threshold-buffers", &threshold, NULL);
 
-    /* and now get out of here */
-    return GST_PAD_PROBE_REMOVE;
+    if (threshold == 0) {
+      utils_dbg (PLR, "item %p: detected file with unknown duration, "
+          "increasing queue size\n", item);
+
+      /* Increase the queue size to let the parser go through enough data
+       * to be able to make an estimation about the duration.
+       * In my tests, mpegaudioparse needs usually 38-40 buffers before it
+       * can make an estimation about the duration of the file. By setting
+       * min-threshold-buffers to 50, we essentially tell the pipeline that
+       * we want to get the next buffer in this callback ONLY AFTER the queue
+       * has enqueued 50 buffers, so we can be sure that mpegaudioparse has
+       * processed enough data to be able to make an estimation. */
+      g_object_set (item->queue, "max-size-buffers", 50 + max_buffers,
+          "min-threshold-buffers", 50, NULL);
+
+      /* drop this buffer and wait for the next; a small loss, to avoid getting
+       * it through immediately and hearing a glitch */
+      return GST_PAD_PROBE_DROP;
+    } else {
+      utils_wrn (PLR, "item %p: unknown file duration, consider remuxing; "
+          "skipping playback: %s\n", item, item->file);
+
+      /* Here we unlink the pad from the audiomixer because letting the buffer
+       * go in the GstAggregator (parent class of audiomixer) may cause some
+       * locking on this thread, which will delay freeing this item and may
+       * block the main thread for significant time.
+       * As a side-effect, this causes an ERROR GstMessage, which gets posted
+       * on the bus and we recycle the item from the handler of the message,
+       * in a similar way we do when another error occurs (for example, when
+       * a decoder is missing) */
+      gst_pad_unlink (pad, item->mixer_sink);
+
+      /* and now get out of here */
+      return GST_PAD_PROBE_REMOVE;
+    }
   }
 
   /* schedule fade in */
@@ -139,8 +164,7 @@ play_queue_item_new (struct player * self, struct play_queue_item * previous)
   time_t sched_time_secs;
   GstElement *decodebin;
   GstElement *audioconvert;
-  GstPad *convert_src, *convert_sink;
-  GstPad *ghost;
+  GstPad *queue_src, *convert_sink, *ghost;
   GstClockTime offset = 0;
 
   /* time_t is in seconds, sched_unix_time is in microseconds */
@@ -187,28 +211,40 @@ next:
   g_object_set (decodebin, "uri", uri, NULL);
   gst_bin_add (GST_BIN (item->bin), decodebin);
 
-  /* plug audioconvert in between;
+  /* plug audioconvert & audioresample in between;
    * audiomixer cannot handle different formats on different sink pads */
   audioconvert = gst_parse_bin_from_description (
       "audioconvert ! audioresample", TRUE, NULL);
   gst_bin_add (GST_BIN (item->bin), audioconvert);
 
-  /* link the audioconvert bin's src pad to the audiomixer's sink */
-  item->mixer_sink = gst_element_get_request_pad (self->mixer, "sink_%u");
+  /* This queue is there to support VBR mp3 files that don't have a Xing
+   * header and therefore we cannot know their duration from the beginning.
+   * The queue, once enabled (see itembin_srcpad_buffer_probe), ensures that
+   * mpegaudioparse will have parsed enough data to be able to estimate
+   * the duration of the file */
+  item->queue = gst_element_factory_make ("queue", NULL);
+  g_object_set (item->queue, "max-size-buffers", 10, NULL);
+  gst_bin_add (GST_BIN (item->bin), item->queue);
 
-  convert_src = gst_element_get_static_pad (audioconvert, "src");
-  ghost = gst_ghost_pad_new ("src", convert_src);
-  gst_element_add_pad (item->bin, ghost);
-  gst_pad_link (ghost, item->mixer_sink);
-  gst_object_unref (convert_src);
-
-  /* and the decodebin's src pad to the audioconvert bin's sink */
+  /* link the decodebin's src pad to the audioconvert's sink */
   convert_sink = gst_element_get_static_pad (audioconvert, "sink");
   g_signal_connect_object (decodebin, "pad-added",
       (GCallback) decodebin_pad_added, convert_sink, 0);
   gst_object_unref (convert_sink);
 
-  /* link the pad to a sink of the mixer and add probes */
+  /* link the audioconvert bin to the queue */
+  gst_element_link (audioconvert, item->queue);
+
+  /* link the audioconvert bin's src pad to the audiomixer's sink */
+  item->mixer_sink = gst_element_get_request_pad (self->mixer, "sink_%u");
+
+  queue_src = gst_element_get_static_pad (item->queue, "src");
+  ghost = gst_ghost_pad_new ("src", queue_src);
+  gst_element_add_pad (item->bin, ghost);
+  gst_pad_link (ghost, item->mixer_sink);
+  gst_object_unref (queue_src);
+
+  /* add probes */
   gst_pad_add_probe (ghost,
       GST_PAD_PROBE_TYPE_BUFFER | GST_PAD_PROBE_TYPE_BLOCK,
       (GstPadProbeCallback) itembin_srcpad_buffer_probe, item, NULL);
