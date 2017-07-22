@@ -378,11 +378,8 @@ player_handle_item_eos (struct play_queue_item * item)
 static gboolean
 player_bus_watch (GstBus *bus, GstMessage *msg, struct player *self)
 {
-  const GstStructure *s;
   GError *error;
   gchar *debug = NULL;
-  const gchar *name;
-  gint i;
 
   switch (GST_MESSAGE_TYPE (msg)) {
     case GST_MESSAGE_EOS:
