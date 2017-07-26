@@ -578,8 +578,11 @@ refresh_metadata (struct player * self)
   populate_song_info (self->playlist, &mstate->current);
   populate_song_info (self->playlist->next, &mstate->next);
 
-  if (self->playlist->next)
-    mstate->overlap_sec = self->playlist->next->fader.fadein_duration_secs;
+  if (self->playlist->next &&
+      self->playlist->next->fader.fadein_duration_secs > 0)
+    mstate->overlap_sec = self->playlist->fader.fadeout_duration_secs;
+  else
+    mstate->overlap_sec = 0;
 
   pthread_mutex_unlock (&mstate->proc_mutex);
 
