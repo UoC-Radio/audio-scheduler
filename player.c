@@ -528,6 +528,19 @@ player_bus_watch (GstBus *bus, GstMessage *msg, struct player *self)
   return G_SOURCE_CONTINUE;
 }
 
+/* this function replaces all occurencies of the double quote character (")
+ * with a single quote character (') in order to allow the string to be used
+ * as a JSON value without the need for escaping */
+static inline void
+string_replace_quotes (char * str)
+{
+  char *c;
+  if (str != NULL)
+    for (c = str; *c != '\0'; c++)
+      if (*c == '"')
+        *c = '\'';
+}
+
 static void
 populate_song_info (struct play_queue_item * item, struct song_info * song)
 {
@@ -546,6 +559,7 @@ populate_song_info (struct play_queue_item * item, struct song_info * song)
     return;
 
   song->path = g_strdup (item->file);
+  string_replace_quotes (song->path);
 
   tag_event = gst_pad_get_sticky_event (item->mixer_sink, GST_EVENT_TAG, 0);
   if (tag_event)
@@ -553,8 +567,11 @@ populate_song_info (struct play_queue_item * item, struct song_info * song)
 
   if (taglist) {
     gst_tag_list_get_string (taglist, GST_TAG_ARTIST, &song->artist);
+    string_replace_quotes (song->artist);
     gst_tag_list_get_string (taglist, GST_TAG_ALBUM, &song->album);
+    string_replace_quotes (song->album);
     gst_tag_list_get_string (taglist, GST_TAG_TITLE, &song->title);
+    string_replace_quotes (song->title);
   }
 
   if (gst_pad_peer_query_position (item->mixer_sink, GST_FORMAT_TIME, &pos))
