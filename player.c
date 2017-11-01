@@ -250,7 +250,7 @@ next:
   /* plug audioconvert & audioresample in between;
    * audiomixer cannot handle different formats on different sink pads */
   audioconvert = gst_parse_bin_from_description (
-      "audioconvert ! audioresample", TRUE, NULL);
+      "audioconvert ! audioresample ! rgvolume", TRUE, NULL);
   gst_bin_add (GST_BIN (item->bin), audioconvert);
 
   /* This queue is there to support VBR mp3 files that don't have a Xing
