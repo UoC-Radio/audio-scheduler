@@ -276,6 +276,7 @@ next:
 
   queue_src = gst_element_get_static_pad (item->queue, "src");
   ghost = gst_ghost_pad_new ("src", queue_src);
+  gst_pad_set_active (ghost, TRUE);
   gst_element_add_pad (item->bin, ghost);
   gst_pad_link (ghost, item->mixer_sink);
   gst_object_unref (queue_src);
