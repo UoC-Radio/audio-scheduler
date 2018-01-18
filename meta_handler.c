@@ -285,10 +285,14 @@ meta_handler_init(struct meta_handler *mh, uint16_t port, const char* ip4addr)
 void
 meta_handler_destroy(struct meta_handler *mh)
 {
-	pthread_cancel(mh->tid);
-	free(mh->msg_buff);
-	mh->msg_buff = NULL;
-	pthread_join(mh->tid, NULL);
+	if(mh->tid!=NULL){
+		pthread_cancel(mh->tid);
+		free(mh->msg_buff);
+		mh->msg_buff = NULL;
+		pthread_join(mh->tid, NULL);
+
+	}
+	
 }
 
 struct current_state*
