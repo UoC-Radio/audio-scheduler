@@ -244,7 +244,12 @@ next:
   /* create the decodebin and link it */
   decodebin = gst_element_factory_make ("uridecodebin", NULL);
   gst_util_set_object_arg (G_OBJECT (decodebin), "caps", "audio/x-raw");
-  g_object_set (decodebin, "uri", uri, NULL);
+  g_object_set (decodebin,
+      "uri", uri,
+      "use-buffering", TRUE,
+      "buffer-size", 0, /* disable limiting the buffer by size */
+      "buffer-duration", 60 * GST_SECOND,
+      NULL);
   gst_bin_add (GST_BIN (item->bin), decodebin);
 
   /* plug audioconvert & audioresample in between;
