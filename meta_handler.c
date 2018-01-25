@@ -287,12 +287,10 @@ meta_handler_destroy(struct meta_handler *mh)
 {
 	if(mh->tid!=NULL){
 		pthread_cancel(mh->tid);
-		free(mh->msg_buff);
-		mh->msg_buff = NULL;
 		pthread_join(mh->tid, NULL);
-
-	}
-	
+	}	
+	free(mh->msg_buff);
+	mh->msg_buff = NULL;
 }
 
 struct current_state*
