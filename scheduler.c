@@ -250,5 +250,5 @@ sched_cleanup(struct scheduler* sched)
 {
 	if(sched->cfg)
 		cfg_cleanup(sched->cfg);
-	sched->cfg = NULL;	
+	sched->cfg = NULL;
 }
