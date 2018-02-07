@@ -136,9 +136,9 @@ pls_shuffle(struct playlist* pls)
 	/* Shuffle playlist using Durstenfeld's algorithm:
 	 * Pick a random number from the remaining ones,
 	 * and stack it up the end of the array. */
-	 char *tmp = NULL;
-	 for (i = pls->num_items-1; i > 0; i--) {
-	 	temp_idx = utils_get_random_uint() % i;
+	char *tmp = NULL;
+	for (i = pls->num_items-1; i > 0; i--) {
+		temp_idx = utils_get_random_uint() % i;
 		SWAP(pls->items,temp_idx,i)
 	}
 
@@ -220,7 +220,7 @@ pls_process(struct playlist* pls)
 		while(fgets(line, PATH_MAX, pls_file) != NULL) {
 			/* Not a file */
 			if(strncmp(line, "File", 4))
-				continue; 
+				continue;
 
 			delim = strchr(line, '=');
 			delim++;
@@ -236,7 +236,7 @@ pls_process(struct playlist* pls)
 		while(fgets(line, PATH_MAX, pls_file) != NULL) {
 			/* EXTINF etc */
 			if(line[0] == '#')
-				continue; 
+				continue;
 
 			delim = strchr(line, '=');
 			delim++;
