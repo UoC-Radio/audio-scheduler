@@ -25,6 +25,8 @@
 #include <stdio.h>	/* For FILE handling */
 #include <limits.h>	/* For PATH_MAX */
 
+#define swap(array,T,x,y) T tmp; tmp = array[x]; array[x] = array[y]; array[y] = tmp
+
 enum pls_type {
 	TYPE_PLS = 1,
 	TYPE_M3U = 2,
@@ -128,38 +130,16 @@ cleanup:
 int
 pls_shuffle(struct playlist* pls)
 {
-	char** temp = NULL;
-	int array_size = pls->num_items * sizeof(char*);
-	int remaining = pls->num_items;
 	unsigned int temp_idx = 0;
-	unsigned int items_idx = 0;
 	int i = 0;
 
-	temp = malloc(array_size);
-	if(!temp) {
-		utils_err(PLS, "Could not allocate temporary file array\n");
-		return -1;
+	/* Shuffle playlist using Durstenfeld's algorithm:
+	 * Pick a random number from the remaining ones,
+	 * and stack it up the end of the array. */
+	 for (i = pls->num_items-1; i > 0; i--) {
+	 	temp_idx = utils_get_random_uint() % i;
+		swap(pls->items,char*,temp_idx,i);
 	}
-	memset(temp, 0, array_size);
-
-	/* A random distribution is uniform so
-	 * each slot has the same propability
-	 * which means that we shouldn't get
-	 * many collisions here and this should
-	 * complete fast enough */
-	while(remaining > 0) {
-		temp_idx = utils_get_random_uint() % pls->num_items;
-
-		/* Slot taken, re-try */
-		if(temp[temp_idx] != NULL)
-			continue;
-
-		temp[temp_idx] = pls->items[items_idx++];
-		remaining--;
-	}
-
-	free(pls->items);
-	pls->items = temp;
 
 	if(utils_is_debug_enabled(SHUF)) {
 		utils_dbg(SHUF, "--== Shuffled list ==--\n");
