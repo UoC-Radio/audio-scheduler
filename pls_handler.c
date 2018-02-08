@@ -25,8 +25,6 @@
 #include <stdio.h>	/* For FILE handling */
 #include <limits.h>	/* For PATH_MAX */
 
-#define SWAP(array,x,y) tmp = array[x]; array[x] = array[y]; array[y] = tmp;
-
 enum pls_type {
 	TYPE_PLS = 1,
 	TYPE_M3U = 2,
@@ -122,6 +120,13 @@ cleanup:
 	return ret;
 }
 
+static inline void
+pls_file_swap(char** items, char* tmp, int x, int y)
+{
+	tmp = items[x];
+	items[x] = items[y];
+	items[y] = tmp;
+}
 
 /**********\
 * SHUFFLER *
@@ -136,10 +141,10 @@ pls_shuffle(struct playlist* pls)
 	/* Shuffle playlist using Durstenfeld's algorithm:
 	 * Pick a random number from the remaining ones,
 	 * and stack it up the end of the array. */
-	char *tmp = NULL;
+	char* tmp = NULL;
 	for (i = pls->num_items-1; i > 0; i--) {
 		temp_idx = utils_get_random_uint() % i;
-		SWAP(pls->items,temp_idx,i)
+		pls_file_swap(pls->items, tmp, temp_idx, i);
 	}
 
 	if(utils_is_debug_enabled(SHUF)) {
