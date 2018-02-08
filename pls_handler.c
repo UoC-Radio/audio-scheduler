@@ -121,9 +121,9 @@ cleanup:
 }
 
 static inline void
-pls_file_swap(char** items, char* tmp, int x, int y)
+pls_file_swap(char** items, int x, int y)
 {
-	tmp = items[x];
+	char* tmp = items[x];
 	items[x] = items[y];
 	items[y] = tmp;
 }
@@ -135,20 +135,20 @@ pls_file_swap(char** items, char* tmp, int x, int y)
 int
 pls_shuffle(struct playlist* pls)
 {
-	unsigned int temp_idx = 0;
-	int i = 0;
+	unsigned int next_file_idx = 0;
+	int target_slot = 0;
 
 	/* Shuffle playlist using Durstenfeld's algorithm:
 	 * Pick a random number from the remaining ones,
 	 * and stack it up the end of the array. */
-	char* tmp = NULL;
-	for (i = pls->num_items-1; i > 0; i--) {
-		temp_idx = utils_get_random_uint() % i;
-		pls_file_swap(pls->items, tmp, temp_idx, i);
+	for (target_slot = pls->num_items-1; target_slot > 0; target_slot--) {
+		next_file_idx = utils_get_random_uint() % target_slot;
+		pls_file_swap(pls->items, next_file_idx, target_slot);
 	}
 
 	if(utils_is_debug_enabled(SHUF)) {
 		utils_dbg(SHUF, "--== Shuffled list ==--\n");
+		int i = 0;
 		for(i = 0; i < pls->num_items; i++)
 			utils_dbg(SHUF|SKIP, "%i %s\n", i, pls->items[i]);
 	}
