@@ -120,6 +120,13 @@ cleanup:
 	return ret;
 }
 
+static inline void
+pls_file_swap(char** items, int x, int y)
+{
+	char* tmp = items[x];
+	items[x] = items[y];
+	items[y] = tmp;
+}
 
 /**********\
 * SHUFFLER *
@@ -128,41 +135,20 @@ cleanup:
 int
 pls_shuffle(struct playlist* pls)
 {
-	char** temp = NULL;
-	int array_size = pls->num_items * sizeof(char*);
-	int remaining = pls->num_items;
-	unsigned int temp_idx = 0;
-	unsigned int items_idx = 0;
-	int i = 0;
+	unsigned int next_file_idx = 0;
+	int target_slot = 0;
 
-	temp = malloc(array_size);
-	if(!temp) {
-		utils_err(PLS, "Could not allocate temporary file array\n");
-		return -1;
+	/* Shuffle playlist using Durstenfeld's algorithm:
+	 * Pick a random number from the remaining ones,
+	 * and stack it up the end of the array. */
+	for (target_slot = pls->num_items-1; target_slot > 0; target_slot--) {
+		next_file_idx = utils_get_random_uint() % target_slot;
+		pls_file_swap(pls->items, next_file_idx, target_slot);
 	}
-	memset(temp, 0, array_size);
-
-	/* A random distribution is uniform so
-	 * each slot has the same propability
-	 * which means that we shouldn't get
-	 * many collisions here and this should
-	 * complete fast enough */
-	while(remaining > 0) {
-		temp_idx = utils_get_random_uint() % pls->num_items;
-
-		/* Slot taken, re-try */
-		if(temp[temp_idx] != NULL)
-			continue;
-
-		temp[temp_idx] = pls->items[items_idx++];
-		remaining--;
-	}
-
-	free(pls->items);
-	pls->items = temp;
 
 	if(utils_is_debug_enabled(SHUF)) {
 		utils_dbg(SHUF, "--== Shuffled list ==--\n");
+		int i = 0;
 		for(i = 0; i < pls->num_items; i++)
 			utils_dbg(SHUF|SKIP, "%i %s\n", i, pls->items[i]);
 	}
@@ -239,7 +225,7 @@ pls_process(struct playlist* pls)
 		while(fgets(line, PATH_MAX, pls_file) != NULL) {
 			/* Not a file */
 			if(strncmp(line, "File", 4))
-				continue; 
+				continue;
 
 			delim = strchr(line, '=');
 			delim++;
@@ -255,7 +241,7 @@ pls_process(struct playlist* pls)
 		while(fgets(line, PATH_MAX, pls_file) != NULL) {
 			/* EXTINF etc */
 			if(line[0] == '#')
-				continue; 
+				continue;
 
 			delim = strchr(line, '=');
 			delim++;
