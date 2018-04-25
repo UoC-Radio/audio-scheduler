@@ -35,7 +35,7 @@ struct song_info {
 };
 
 /* On IDv2 artist/album/title are up to 60chars,
- * Vorbis (ogg/flac) don't have that limitation.
+ * Vorbis (ogg/flac) doesn't have that limitation.
  * 64 should be enough in any case */
 #define SI_STRING_LEN	(64 + 64 + 64 + PATH_MAX + 10 + 10)
 

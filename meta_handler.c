@@ -165,7 +165,7 @@ meta_server_callback(struct meta_handler *mh, int sockfd)
 \***************/
 
 static void*
-meta_server_thead(void* arg)
+meta_server_thread(void* arg)
 {
 	struct meta_handler *mh = (struct meta_handler*) arg;
 	struct sockaddr_in clientname = {0};
@@ -222,7 +222,7 @@ meta_server_thead(void* arg)
 
 				FD_SET(client_sockfd, &active_set);
 
-			/* Previously asigned socket */
+			/* Previously assigned socket */
 			} else {
 				ret = meta_server_callback(mh, i);
 				if (ret < 0)
@@ -273,7 +273,7 @@ meta_handler_init(struct meta_handler *mh, uint16_t port, const char* ip4addr)
 
 	/* Start server thread */
 	mh->active = 1;
-	ret = pthread_create(&mh->tid, NULL, meta_server_thead, (void*) mh);
+	ret = pthread_create(&mh->tid, NULL, meta_server_thread, (void*) mh);
 	if(ret < 0) {
 		utils_err(META, "Could not start server thread");
 		return -ret;
@@ -288,7 +288,7 @@ meta_handler_destroy(struct meta_handler *mh)
 	if(mh->tid!=NULL){
 		pthread_cancel(mh->tid);
 		pthread_join(mh->tid, NULL);
-	}	
+	}
 	free(mh->msg_buff);
 	mh->msg_buff = NULL;
 }
