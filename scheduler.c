@@ -248,7 +248,7 @@ sched_init(struct scheduler* sched, char* config_filepath)
 void
 sched_cleanup(struct scheduler* sched)
 {
-	if(sched->cfg!=NULL)
+	if(sched->cfg)
 		cfg_cleanup(sched->cfg);
-	sched->cfg=NULL;	
+	sched->cfg = NULL;
 }
