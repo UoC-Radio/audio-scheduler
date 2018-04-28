@@ -43,7 +43,7 @@ struct playlist {
 struct intermediate_playlist {
 	/* Anonymous struct as per C11
 	 * Note that this declaration is cleaner
-	 * and I preffer it but it needs -fms-extensions
+	 * and I prefer it but it needs -fms-extensions
 	 * to work on GCC, for more infos check out:
 	 * https://gcc.gnu.org/onlinedocs/gcc-5.1.0/gcc/Unnamed-Fields.html
 	 */
