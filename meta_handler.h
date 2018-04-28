@@ -30,6 +30,7 @@ struct song_info {
 	char*	album;
 	char*	title;
 	char*	path;
+	char*	zone;
 	uint32_t duration_sec;
 	uint32_t elapsed_sec;
 };
@@ -37,7 +38,7 @@ struct song_info {
 /* On IDv2 artist/album/title are up to 60chars,
  * Vorbis (ogg/flac) doesn't have that limitation.
  * 64 should be enough in any case */
-#define SI_STRING_LEN	(64 + 64 + 64 + PATH_MAX + 10 + 10)
+#define SI_STRING_LEN	(64 + 64 + 64 + 64 + PATH_MAX + 10 + 10)
 
 struct current_state {
 	struct song_info current;

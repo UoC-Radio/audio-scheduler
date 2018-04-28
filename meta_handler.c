@@ -111,14 +111,16 @@ meta_server_callback(struct meta_handler *mh, int sockfd)
 		"\"Title\": \"%s\",\n\t\t"
 		"\"Path\": \"%s\",\n\t\t"
 		"\"Duration\": \"%i\",\n\t\t"
-		"\"Elapsed\": \"%i\"\n\t\t},\n"
+		"\"Elapsed\": \"%i\",\n\t\t"
+		"\"Zone\": \"%s\"\n\t\t},\n"
 		"\t\"next_song\": {\n\t\t"
 		"\"Artist\": \"%s\",\n\t\t"
 		"\"Album\": \"%s\",\n\t\t"
 		"\"Title\": \"%s\",\n\t\t"
 		"\"Path\": \"%s\",\n\t\t"
 		"\"Duration\": \"%i\",\n\t\t"
-		"\"Elapsed\": \"%i\"\n\t\t},\n"
+		"\"Elapsed\": \"%i\",\n\t\t"
+		"\"Zone\": \"%s\"\n\t\t},\n"
 		"\t\"overlap\": \"%i\"\n}\r\n",
 		curr->artist,
 		curr->album,
@@ -126,12 +128,14 @@ meta_server_callback(struct meta_handler *mh, int sockfd)
 		curr->path,
 		curr->duration_sec,
 		curr->elapsed_sec,
+		curr->zone,
 		next->artist,
 		next->album,
 		next->title,
 		next->path,
 		next->duration_sec,
 		next->elapsed_sec,
+		next->zone,
 		st->overlap_sec);
 	pthread_mutex_unlock(&st->proc_mutex);
 
