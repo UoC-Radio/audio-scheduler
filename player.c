@@ -215,6 +215,9 @@ next:
     item->fader.fadeout_duration_secs = 0;
   }
 
+  /* configure zone */
+  item->zone = zone;
+
   item->bin = gst_bin_new (NULL);
   gst_bin_add (GST_BIN (self->pipeline), item->bin);
 
