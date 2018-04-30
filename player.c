@@ -168,6 +168,7 @@ play_queue_item_new (struct player * self, struct play_queue_item * previous)
   struct play_queue_item *item;
   struct fader *fader;
   gchar *file;
+  gchar *zone;
   gchar *uri;
   GError *error = NULL;
   time_t sched_time;
@@ -185,7 +186,7 @@ play_queue_item_new (struct player * self, struct play_queue_item * previous)
 
 next:
   /* ask scheduler for the next item */
-  if (sched_get_next (self->scheduler, sched_time, &file, &fader) != 0) {
+  if (sched_get_next (self->scheduler, sched_time, &file, &fader, &zone) != 0) {
     utils_err (PLR, "No more files to play!!\n");
     return NULL;
   }
@@ -213,6 +214,9 @@ next:
     item->fader.fadein_duration_secs = 0;
     item->fader.fadeout_duration_secs = 0;
   }
+
+  /* configure zone */
+  item->zone = g_strdup (zone);
 
   item->bin = gst_bin_new (NULL);
   gst_bin_add (GST_BIN (self->pipeline), item->bin);
@@ -286,6 +290,7 @@ play_queue_item_free (struct play_queue_item * item)
   utils_dbg (PLR, "item %p: freeing item\n", item);
 
   g_free (item->file);
+  g_free (item->zone);
 
   gst_element_set_locked_state (item->bin, TRUE);
   gst_element_set_state (item->bin, GST_STATE_NULL);
@@ -519,10 +524,11 @@ populate_song_info (struct play_queue_item * item, struct song_info * song)
   gint64 pos = GST_CLOCK_TIME_NONE;
 
   /* cleanup song_info */
-  g_clear_pointer (&song->path, g_free);
   g_clear_pointer (&song->artist, g_free);
   g_clear_pointer (&song->album, g_free);
   g_clear_pointer (&song->title, g_free);
+  g_clear_pointer (&song->path, g_free);
+  g_clear_pointer (&song->zone, g_free);
   song->duration_sec = song->elapsed_sec = 0;
 
   if (!item)
@@ -530,6 +536,8 @@ populate_song_info (struct play_queue_item * item, struct song_info * song)
 
   song->path = g_strdup (item->file);
   string_replace_quotes (song->path);
+  song->zone = g_strdup (item->zone);
+  string_replace_quotes (song->zone);
 
   tag_event = gst_pad_get_sticky_event (item->mixer_sink, GST_EVENT_TAG, 0);
   if (tag_event)

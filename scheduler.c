@@ -105,7 +105,7 @@ sched_get_next_item(struct playlist* pls)
 
 int
 sched_get_next(struct scheduler* sched, time_t sched_time, char** next,
-	       struct fader** fader)
+	       struct fader** fader, char** zone)
 {
 	struct playlist *pls = NULL;
 	struct intermediate_playlist *ipls = NULL;
@@ -144,6 +144,7 @@ sched_get_next(struct scheduler* sched, time_t sched_time, char** next,
 		if(ret > 0)
 			break;
 	}
+	(*zone) = zn->name;
 
 	if(i < 0) {
 		utils_wrn(SCHED, "Nothing is scheduled for now ");
@@ -250,5 +251,5 @@ sched_cleanup(struct scheduler* sched)
 {
 	if(sched->cfg!=NULL)
 		cfg_cleanup(sched->cfg);
-	sched->cfg=NULL;	
+	sched->cfg=NULL;
 }
