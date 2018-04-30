@@ -216,7 +216,7 @@ next:
   }
 
   /* configure zone */
-  item->zone = zone;
+  item->zone = g_strdup (zone);
 
   item->bin = gst_bin_new (NULL);
   gst_bin_add (GST_BIN (self->pipeline), item->bin);
@@ -290,6 +290,7 @@ play_queue_item_free (struct play_queue_item * item)
   utils_dbg (PLR, "item %p: freeing item\n", item);
 
   g_free (item->file);
+  g_free (item->zone);
 
   gst_element_set_locked_state (item->bin, TRUE);
   gst_element_set_state (item->bin, GST_STATE_NULL);
