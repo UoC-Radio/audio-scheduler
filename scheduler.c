@@ -141,6 +141,12 @@ sched_get_next(struct scheduler* sched, time_t sched_time, char** next,
 	for(i = ds->num_zones - 1; i >= 0; i--) {
 		zn = ds->zones[i];
 		ret = utils_compare_time(&tm, &zn->start_time, 1);
+
+		if (utils_is_debug_enabled (SCHED)) {
+			strftime (datestr, 26, "%H:%M:%S", &zn->start_time);
+			utils_dbg (SCHED, "considering zone '%s' at: %s -> %i\n",
+					zn->name, datestr, ret);
+		}
 		if(ret > 0)
 			break;
 	}
@@ -215,8 +221,8 @@ sched_get_next(struct scheduler* sched, time_t sched_time, char** next,
 
 done:
 	if((*next) != NULL) {
-		utils_info(SCHED, "Got next item: %s (fader: %s)\n",
-			  (*next), (*fader) ? "true" : "false");
+		utils_info(SCHED, "Got next item from zone '%s': %s (fader: %s)\n",
+			zn->name, (*next), (*fader) ? "true" : "false");
 		return 0;
 	}
 

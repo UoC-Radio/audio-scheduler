@@ -444,11 +444,12 @@ static void
 utils_tm_cleanup_date(struct tm *tm)
 {
 	/* Zero-out the date part */
-	tm->tm_mday = 0;
+	tm->tm_mday = 1;
 	tm->tm_mon = 0;
-	tm->tm_year = 0;
+	tm->tm_year = 70;
 	tm->tm_wday = 0;
 	tm->tm_yday = 0;
+	tm->tm_isdst = -1;
 }
 
 int
@@ -463,9 +464,15 @@ utils_compare_time(struct tm *tm1, struct tm* tm0, int no_date)
 		utils_tm_cleanup_date(tm1);
 	}
 
+	errno = 0;
 	t1 = mktime(tm1);
 	t0 = mktime(tm0);
 	diff = difftime(t1, t0);
+
+	if (errno != 0)
+		utils_perr(UTILS, "compare_time");
+	utils_dbg(UTILS, "compare_time: (t1: %li) - (t0: %li) = %lf\n", t1, t0, diff);
+
 	if(diff > 0.0L)
 		return 1;
 	else if(diff < 0.0L)
