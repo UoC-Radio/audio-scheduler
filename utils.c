@@ -466,6 +466,9 @@ utils_compare_time(struct tm *tm1, struct tm* tm0, int no_date)
 	t1 = mktime(tm1);
 	t0 = mktime(tm0);
 	diff = difftime(t1, t0);
+
+	utils_dbg(UTILS, "compare_time: (t1: %li) - (t0: %li) = %lf\n", t1, t0, diff);
+
 	if(diff > 0.0L)
 		return 1;
 	else if(diff < 0.0L)
