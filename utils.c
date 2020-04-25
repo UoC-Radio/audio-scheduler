@@ -444,7 +444,7 @@ static void
 utils_tm_cleanup_date(struct tm *tm)
 {
 	/* Zero-out the date part */
-	tm->tm_mday = 0;
+	tm->tm_mday = 1;
 	tm->tm_mon = 0;
 	tm->tm_year = 70;
 	tm->tm_wday = 0;
