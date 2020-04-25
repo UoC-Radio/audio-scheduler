@@ -10,7 +10,7 @@
 static struct player player = {0};
 
 static const char * usage_str =
-  "Usage: %s [-s audio_sink_bin] [-d debug_level] [-m debug_mask] <config_file>\n";
+  "Usage: %s [-s audio_sink_bin] [-d debug_level] [-m debug_mask] [-p port] <config_file>\n";
 
 static void
 signal_handler(int sig, siginfo_t * info, void *extra)
@@ -27,9 +27,10 @@ main(int argc, char **argv)
 	int ret = 0, opt, tmp;
 	int dbg_lvl = DBG;
 	int dbg_mask = PLR|SCHED|META;
+	uint16_t port = 9670;
 	char *sink = NULL;
 
-	while ((opt = getopt(argc, argv, "s:d:m:")) != -1) {
+	while ((opt = getopt(argc, argv, "s:d:m:p:")) != -1) {
 		switch (opt) {
 		case 's':
 			sink = optarg;
@@ -47,6 +48,13 @@ main(int argc, char **argv)
 				perror("Failed to parse debug mask");
 			else
 				dbg_mask = tmp;
+			break;
+		case 'p':
+			tmp = strtol(optarg, NULL, 10);
+			if (errno != 0)
+				perror("Failed to parse port number");
+			else
+				port = tmp;
 			break;
 		default:
 			printf(usage_str, argv[0]);
@@ -69,7 +77,7 @@ main(int argc, char **argv)
 		goto cleanup;
 	}
 
-	ret = meta_handler_init(&mh, 9670, NULL);
+	ret = meta_handler_init(&mh, port, NULL);
 	if (ret < 0) {
 		utils_err(NONE, "Unable to initialize metadata request hanlder\n");
 		ret = -2;
