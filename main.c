@@ -25,7 +25,7 @@ main(int argc, char **argv)
 	struct sigaction sa = {0};
 	struct meta_handler mh = {0};
 	int ret = 0, opt, tmp;
-	int dbg_lvl = DBG;
+	int dbg_lvl = INFO;
 	int dbg_mask = PLR|SCHED|META;
 	uint16_t port = 9670;
 	char *sink = NULL;
