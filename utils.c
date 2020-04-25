@@ -449,7 +449,7 @@ utils_tm_cleanup_date(struct tm *tm)
 	tm->tm_year = 70;
 	tm->tm_wday = 0;
 	tm->tm_yday = 0;
-	tm->tm_isdst = 0;
+	tm->tm_isdst = -1;
 }
 
 int
