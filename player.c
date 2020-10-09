@@ -43,21 +43,34 @@ itembin_srcpad_buffer_probe (GstPad * pad, GstPadProbeInfo * info,
   if (!gst_pad_query_duration (pad, GST_FORMAT_TIME, &duration) ||
             duration <= 0)
   {
-    utils_wrn (PLR, "item %p: unknown file duration, consider remuxing; "
-        "skipping playback: %s\n", item, item->file);
+    /* try querying again every 20ms; break after 100ms or
+       if the duration is calculated, whichever comes first */
+    gboolean got_duration = FALSE;
+    gint64 now, start = g_get_monotonic_time ();
+    do {
+      g_usleep (20000); /* 20 ms */
+      got_duration = gst_pad_query_duration (pad, GST_FORMAT_TIME, &duration);
+      now = g_get_monotonic_time ();
+    } while ((!got_duration || duration <= 0) && (now - start) < 100000);
 
-    /* Here we unlink the pad from the audiomixer because letting the buffer
-     * go in the GstAggregator (parent class of audiomixer) may cause some
-     * locking on this thread, which will delay freeing this item and may block
-     * the main thread for significant time.
-     * As a side-effect, this causes an ERROR GstMessage, which gets posted
-     * on the bus and we recycle the item from the handler of the message,
-     * in a similar way we do when another error occurs (for example, when
-     * a decoder is missing) */
-    gst_pad_unlink (pad, item->mixer_sink);
+    if (!got_duration || duration <= 0) {
+      utils_wrn (PLR, "item %p: unknown file duration, consider remuxing; "
+          "skipping playback: %s\n", item, item->file);
 
-    /* and now get out of here */
-    return GST_PAD_PROBE_REMOVE;
+      /* Here we unlink the pad from the audiomixer because letting the buffer
+      * go in the GstAggregator (parent class of audiomixer) may cause some
+      * locking on this thread, which will delay freeing this item and may block
+      * the main thread for significant time.
+      * As a side-effect, this causes an ERROR GstMessage, which gets posted
+      * on the bus and we recycle the item from the handler of the message,
+      * in a similar way we do when another error occurs (for example, when
+      * a decoder is missing) */
+      gst_pad_unlink (pad, item->mixer_sink);
+
+      /* and now get out of here */
+      GST_PAD_PROBE_INFO_FLOW_RETURN (info) = GST_FLOW_NOT_LINKED;
+      return GST_PAD_PROBE_REMOVE;
+    }
   }
 
   /* schedule fade in */
