@@ -241,7 +241,7 @@ next:
       "uri", uri,
       "use-buffering", TRUE,
       "buffer-size", 0, /* disable limiting the buffer by size */
-      "buffer-duration", 60 * GST_SECOND,
+      "buffer-duration", 0, /* disable limiting the buffer by duration */
       NULL);
   gst_bin_add (GST_BIN (item->bin), decodebin);
 
