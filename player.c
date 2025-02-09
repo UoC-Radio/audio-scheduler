@@ -252,7 +252,7 @@ next:
   gst_bin_add (GST_BIN (item->bin), audioconvert);
 
   /* link the audioconvert bin's src pad to the audiomixer's sink */
-  item->mixer_sink = gst_element_get_request_pad (self->mixer, "sink_%u");
+  item->mixer_sink = gst_element_request_pad_simple (self->mixer, "sink_%u");
 
   convert_src = gst_element_get_static_pad (audioconvert, "src");
   ghost = gst_ghost_pad_new ("src", convert_src);

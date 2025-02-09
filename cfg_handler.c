@@ -168,11 +168,11 @@ cfg_get_fader(xmlDocPtr config, xmlNodePtr fdr_node)
 	while (element != NULL) {
 		if(!strncmp((const char*) element->name, "FadeInDurationSecs", 19))
 			fdr->fadein_duration_secs = cfg_get_integer(config, element);
-		if(!strncmp((const char*) element->name, "FadeOutDurationSecs", 20))
+		else if(!strncmp((const char*) element->name, "FadeOutDurationSecs", 20))
 			fdr->fadeout_duration_secs = cfg_get_integer(config, element);
-		if(!strncmp((const char*) element->name, "MinLevel", 9))
+		else if(!strncmp((const char*) element->name, "MinLevel", 9))
 			fdr->min_lvl = cfg_get_float(config, element);
-		if(!strncmp((const char*) element->name, "MaxLevel", 9))
+		else if(!strncmp((const char*) element->name, "MaxLevel", 9))
 			fdr->max_lvl = cfg_get_float(config, element);
 		if(parser_failed) {
 			utils_err(CFG, "Parsing of fader element failed\n");
@@ -216,11 +216,15 @@ cfg_free_pls(struct playlist *pls)
 	if(!pls)
 		return;
 
-	if(pls->filepath)
+	if(pls->filepath) {
 		xmlFree((xmlChar*) pls->filepath);
+		pls->filepath = NULL;
+	}
 
-	if(pls->fader)
+	if(pls->fader) {
 		cfg_free_fader(pls->fader);
+		pls->fader = NULL;
+	}
 
 	pls_files_cleanup(pls);
 
@@ -252,9 +256,9 @@ cfg_get_pls(xmlDocPtr config, xmlNodePtr pls_node)
 	while (element != NULL) {
 		if(!strncmp((const char*) element->name, "Path", 5))
 			pls->filepath = cfg_get_string(config, element);
-		if(!strncmp((const char*) element->name, "Shuffle", 8))
+		else if(!strncmp((const char*) element->name, "Shuffle", 8))
 			pls->shuffle = cfg_get_boolean(config, element);
-		if(!strncmp((const char*) element->name, "Fader", 5))
+		else if(!strncmp((const char*) element->name, "Fader", 5))
 			pls->fader = cfg_get_fader(config, element);
 		if(parser_failed) {
 			utils_err(CFG, "Parsing of playlist element failed\n");
@@ -301,14 +305,18 @@ cfg_free_ipls(struct intermediate_playlist *ipls)
 	if(!ipls)
 		return;
 
-	if(ipls->name)
+	if(ipls->name) {
 		xmlFree((xmlChar*) ipls->name);
-
-	if(ipls->filepath)
+		ipls->name = NULL;
+	}
+	if(ipls->filepath) {
 		xmlFree((xmlChar*) ipls->filepath);
-
-	if(ipls->fader)
+		ipls->filepath = NULL;
+	}
+	if(ipls->fader) {
 		cfg_free_fader(ipls->fader);
+		ipls->fader = NULL;
+	}
 
 	pls_files_cleanup((struct playlist*) ipls);
 
@@ -350,13 +358,13 @@ cfg_get_ipls(xmlDocPtr config, xmlNodePtr ipls_node)
 	while (element != NULL) {
 		if(!strncmp((const char*) element->name, "Path", 5))
 			ipls->filepath = cfg_get_string(config, element);
-		if(!strncmp((const char*) element->name, "Shuffle", 8))
+		else if(!strncmp((const char*) element->name, "Shuffle", 8))
 			ipls->shuffle = cfg_get_boolean(config, element);
-		if(!strncmp((const char*) element->name, "Fader", 5))
+		else if(!strncmp((const char*) element->name, "Fader", 5))
 			ipls->fader = cfg_get_fader(config, element);
-		if(!strncmp((const char*) element->name, "SchedIntervalMins", 18))
+		else if(!strncmp((const char*) element->name, "SchedIntervalMins", 18))
 			ipls->sched_interval_mins = cfg_get_integer(config, element);
-		if(!strncmp((const char*) element->name, "NumSchedItems", 14))
+		else if(!strncmp((const char*) element->name, "NumSchedItems", 14))
 			ipls->num_sched_items = cfg_get_integer(config, element);
 		if(parser_failed) {
 			utils_err(CFG, "Parsing of intermediate playlist %s failed\n",
@@ -426,23 +434,39 @@ cfg_free_zone(struct zone *zone)
 	if(!zone)
 		return;
 
-	if(zone->name)
+	if(zone->name) {
 		xmlFree((xmlChar*) zone->name);
-	if(zone->maintainer)
+		zone->name = NULL;
+	}
+	if(zone->maintainer) {
 		xmlFree((xmlChar*) zone->maintainer);
-	if(zone->description)
+		zone->maintainer = NULL;
+	}
+	if(zone->description) {
 		xmlFree((xmlChar*) zone->description);
-	if(zone->comment)
+		zone->description = NULL;
+	}
+	if(zone->comment) {
 		xmlFree((xmlChar*) zone->comment);
-	if(zone->main_pls)
+		zone->comment = NULL;
+	}
+	if(zone->main_pls) {
 		cfg_free_pls(zone->main_pls);
-	if(zone->fallback_pls)
+		zone->main_pls = NULL;
+	}
+	if(zone->fallback_pls) {
 		cfg_free_pls(zone->fallback_pls);
-	for(i = 0; i < zone->num_others && zone->others; i++)
-		if(zone->others[i])
-			cfg_free_ipls(zone->others[i]);
-
-	free(zone->others);
+		zone->fallback_pls = NULL;
+	}
+	if (zone->others) {
+		for(i = 0; i < zone->num_others; i++)
+			if(zone->others[i]) {
+				cfg_free_ipls(zone->others[i]);
+				zone->others[i] = NULL;
+			}
+		free(zone->others);
+		zone->others = NULL;
+	}
 	free(zone);
 }
 
@@ -485,24 +509,25 @@ cfg_get_zone(xmlDocPtr config, xmlNodePtr zone_node)
 	while (element != NULL) {
 		if(!strncmp((const char*) element->name, "Maintainer", 11))
 			zn->maintainer = cfg_get_string(config, element);
-		if(!strncmp((const char*) element->name, "Description", 12))
+		else if(!strncmp((const char*) element->name, "Description", 12))
 			zn->description = cfg_get_string(config, element);
-		if(!strncmp((const char*) element->name, "Comment", 8))
+		else if(!strncmp((const char*) element->name, "Comment", 8))
 			zn->comment = cfg_get_string(config, element);
-		if(!strncmp((const char*) element->name, "Main", 5))
+		else if(!strncmp((const char*) element->name, "Main", 5))
 			zn->main_pls = cfg_get_pls(config,element);
-		if(!strncmp((const char*) element->name, "Fallback", 9))
+		else if(!strncmp((const char*) element->name, "Fallback", 9))
 			zn->fallback_pls = cfg_get_pls(config,element);
-		if(!strncmp((const char*) element->name, "Intermediate", 13)) {
+		else if(!strncmp((const char*) element->name, "Intermediate", 13)) {
 			/* Expand the others array */
-			zn->num_others++;
-			zn->others = realloc(zn->others, (zn->num_others *
-					     (sizeof(struct intermediate_playlist*))));
-			if(!zn->others) {
+			struct intermediate_playlist **new_ptr = realloc(zn->others, ((zn->num_others + 1) *
+									 (sizeof(struct intermediate_playlist*))));
+			if(!new_ptr) {
 				utils_err(CFG, "Could not re-alloc zone!\n");
 				parser_failed = 1;
 				goto cleanup;
 			}
+			zn->num_others++;
+			zn->others = new_ptr;
 
 			/* Grab and store the ipls */
 			zn->others[zn->num_others - 1] = cfg_get_ipls(config,element);
@@ -547,10 +572,15 @@ cfg_free_day_schedule(struct day_schedule* ds)
 	if(!ds)
 		return;
 
-	for(i = 0; i < ds->num_zones && ds->zones; i++)
-		if(ds->zones[i] != NULL)
-			cfg_free_zone(ds->zones[i]);
-	free(ds->zones);
+	if(ds->zones) {
+		for(i = 0; i < ds->num_zones; i++)
+			if(ds->zones[i] != NULL) {
+				cfg_free_zone(ds->zones[i]);
+				ds->zones[i] = NULL;
+			}
+		free(ds->zones);
+	}
+
 	free(ds);
 }
 
@@ -588,14 +618,15 @@ cfg_get_day_schedule(xmlDocPtr config, xmlNodePtr ds_node)
 		}
 
 		/* Expand the zones array */
-		ds->num_zones++;
-		ds->zones = realloc(ds->zones, (ds->num_zones *
-				    (sizeof(struct day_schedule*))));
-		if(!ds->zones) {
+		struct zone **new_ptr = realloc(ds->zones, ((ds->num_zones + 1) * sizeof(struct zone*)));
+		if(!new_ptr) {
 			utils_err(CFG, "Could not re-alloc day schedule!\n");
 			parser_failed = 1;
 			goto cleanup;
 		}
+		ds->num_zones++;
+		ds->zones = new_ptr;
+
 		ds->zones[ds->num_zones - 1] = cfg_get_zone(config,element);
 		if((!ds->zones[ds->num_zones - 1]) || parser_failed){
 			utils_err(CFG, "Parsing of a day schedule failed\n");
@@ -668,8 +699,10 @@ cfg_free_week_schedule(struct week_schedule *ws)
 		return;
 
 	for(i = 0; i < 7; i++)
-		if(ws->days[i] != NULL)
+		if(ws->days[i] != NULL) {
 			cfg_free_day_schedule(ws->days[i]);
+			ws->days[i] = NULL;
+		}
 
 	free(ws);
 }
@@ -698,17 +731,17 @@ cfg_get_week_schedule(xmlDocPtr config, xmlNodePtr ws_node)
 		 * which means that Sunday = 0, Monday = 1 etc */
 		if(!strncmp((const char*) element->name, "Sun",4))
 			ws->days[0] = cfg_get_day_schedule(config,element);
-		if(!strncmp((const char*) element->name, "Mon",4))
+		else if(!strncmp((const char*) element->name, "Mon",4))
 			ws->days[1] = cfg_get_day_schedule(config,element);
-		if(!strncmp((const char*) element->name, "Tue",4))
+		else if(!strncmp((const char*) element->name, "Tue",4))
 			ws->days[2] = cfg_get_day_schedule(config,element);
-		if(!strncmp((const char*) element->name, "Wed",4))
+		else if(!strncmp((const char*) element->name, "Wed",4))
 			ws->days[3] = cfg_get_day_schedule(config,element);
-		if(!strncmp((const char*) element->name, "Thu",4))
+		else if(!strncmp((const char*) element->name, "Thu",4))
 			ws->days[4] = cfg_get_day_schedule(config,element);
-		if(!strncmp((const char*) element->name, "Fri",4))
+		else if(!strncmp((const char*) element->name, "Fri",4))
 			ws->days[5] = cfg_get_day_schedule(config,element);
-		if(!strncmp((const char*) element->name, "Sat",4))
+		else if(!strncmp((const char*) element->name, "Sat",4))
 			ws->days[6] = cfg_get_day_schedule(config,element);
 		if(parser_failed) {
 			utils_err(CFG, "Parsing of week schedule failed\n");
@@ -744,6 +777,8 @@ cleanup:
 static void
 cfg_print_validation_error_msg(void *ctx, const char *fmt, ...)
 {
+	if (!fmt)
+		return;
 	va_list args;
 	va_start(args, fmt);
 	utils_err(CFG, "Config validation failed: ");
@@ -807,7 +842,7 @@ cleanup:
 	if (validation_ctx)
 		xmlSchemaFreeValidCtxt(validation_ctx);
 
-	return (-1 ? parser_failed : 0);
+	return (parser_failed ? -1 : 0);
 }
 
 
@@ -818,6 +853,8 @@ cleanup:
 void
 cfg_cleanup(struct config *cfg)
 {
+	if(!cfg)
+		return;
 	if(cfg->ws != NULL)
 		cfg_free_week_schedule(cfg->ws);
 	cfg->ws = NULL;
@@ -896,8 +933,10 @@ cfg_process(struct config *cfg)
 
 cleanup:
 	/* Cleanup the config and any leftovers from the parser */
-	xmlFreeDoc(config);
-	xmlFreeParserCtxt(ctx);
+	if(config)
+		xmlFreeDoc(config);
+	if(ctx)
+		xmlFreeParserCtxt(ctx);
 	xmlCleanupParser();
 	if(parser_failed) {
 		ret = -1;

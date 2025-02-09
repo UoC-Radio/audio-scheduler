@@ -155,6 +155,7 @@ sched_get_next(struct scheduler* sched, time_t sched_time, char** next,
 	if(i < 0) {
 		utils_wrn(SCHED, "Nothing is scheduled for now ");
 		utils_wrn(SCHED|SKIP, "using first zone of the day\n");
+		zn = ds->zones[0];
 	}
 
 	/* Is it time to load an item from an intermediate

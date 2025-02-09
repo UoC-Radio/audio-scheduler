@@ -57,12 +57,16 @@ pls_check_type(char* filepath)
 static void
 pls_files_cleanup_internal(char** files, int num_files)
 {
+	int i = 0;
+
 	if(!files)
 		return;
 
-	while(num_files > 0) {
-		free(files[num_files - 1]);
-		num_files--;
+	for(i = 0; i < num_files; i++) {
+		if(files[i]) {
+			free(files[i]);
+			files[i] = NULL;
+		}
 	}
 
 	free(files);
@@ -83,18 +87,16 @@ pls_add_file(char* filepath, char ***files, int *num_files)
 	 * folders, this is not supported here
 	 * for now */
 	if(!utils_is_readable_file(filepath))
-		goto cleanup;
+		return -1;
 
 	/* Get size of the filepath string, including
 	 * null terminator */
-	len = strnlen(filepath, PATH_MAX);
-	len++;
+	len = strnlen(filepath, PATH_MAX) + 1;
 
 	file = (char*) malloc(len);
 	if(!file) {
 		utils_err(PLS, "Could not allocate filename on files array\n");
-		ret = -1;
-		goto cleanup;
+		return -1;
 	}
 	memcpy(file, filepath, len);
 
@@ -120,6 +122,11 @@ cleanup:
 	return ret;
 }
 
+
+/**********\
+* SHUFFLER *
+\**********/
+
 static inline void
 pls_file_swap(char** items, int x, int y)
 {
@@ -128,15 +135,15 @@ pls_file_swap(char** items, int x, int y)
 	items[y] = tmp;
 }
 
-/**********\
-* SHUFFLER *
-\**********/
-
 int
 pls_shuffle(struct playlist* pls)
 {
 	unsigned int next_file_idx = 0;
 	int target_slot = 0;
+
+	/* Nothing to shuffle */
+	if(pls->num_items <= 1)
+		return 0;
 
 	/* Shuffle playlist using Durstenfeld's algorithm:
 	 * Pick a random number from the remaining ones,
@@ -228,6 +235,11 @@ pls_process(struct playlist* pls)
 				continue;
 
 			delim = strchr(line, '=');
+			if(!delim){
+				utils_err(PLS, "malformed line in pls file: %s\n", line);
+				ret = -1;
+				goto cleanup;
+			}
 			delim++;
 
 			ret = pls_add_file(delim, &pls->items, &pls->num_items);
@@ -244,6 +256,11 @@ pls_process(struct playlist* pls)
 				continue;
 
 			delim = strchr(line, '=');
+			if(!delim){
+				utils_err(PLS, "malformed line in m3u file: %s\n", line);
+				ret = -1;
+				goto cleanup;
+			}
 			delim++;
 
 			ret = pls_add_file(line, &pls->items, &pls->num_items);
@@ -260,13 +277,8 @@ pls_process(struct playlist* pls)
 	}
 
 	/* Shuffle contents if needed */
-	if(pls->shuffle) {
-		ret = pls_shuffle(pls);
-		if(ret < 0) {
-			utils_err(PLS, "Shuffling failed for %s\n", pls->filepath);
-			goto cleanup;
-		}
-	}
+	if(pls->shuffle)
+		pls_shuffle(pls);
 
 	utils_dbg(PLS, "Got %i files from %s\n", pls->num_items, pls->filepath);
 
