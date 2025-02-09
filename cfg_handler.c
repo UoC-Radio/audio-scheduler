@@ -24,6 +24,7 @@
 #include <string.h>		/* For memset() / strncmp() */
 #include <time.h>		/* For strptime() and time() */
 #include <signal.h>		/* For sig_atomic_t */
+#include <stdlib.h>		/* For strtof(), malloc/realloc/free() */
 #include <libxml/parser.h>	/* For parser context etc */
 #include <libxml/tree.h>	/* For grabbing stuff off the tree */
 #include <libxml/valid.h>	/* For validation context etc */
@@ -666,7 +667,7 @@ cfg_free_week_schedule(struct week_schedule *ws)
 	if(!ws)
 		return;
 
-	for(i = 0; i < 7 && ws->days; i++)
+	for(i = 0; i < 7; i++)
 		if(ws->days[i] != NULL)
 			cfg_free_day_schedule(ws->days[i]);
 
@@ -820,7 +821,6 @@ cfg_cleanup(struct config *cfg)
 	if(cfg->ws != NULL)
 		cfg_free_week_schedule(cfg->ws);
 	cfg->ws = NULL;
-	free(cfg);
 }
 
 int

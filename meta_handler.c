@@ -280,6 +280,7 @@ meta_handler_init(struct meta_handler *mh, uint16_t port, const char* ip4addr)
 	ret = pthread_create(&mh->tid, NULL, meta_server_thread, (void*) mh);
 	if(ret < 0) {
 		utils_err(META, "Could not start server thread");
+		mh->tid = 0;
 		return -ret;
 	}
 
@@ -289,7 +290,7 @@ meta_handler_init(struct meta_handler *mh, uint16_t port, const char* ip4addr)
 void
 meta_handler_destroy(struct meta_handler *mh)
 {
-	if(mh->tid!=NULL){
+	if(mh->tid){
 		pthread_cancel(mh->tid);
 		pthread_join(mh->tid, NULL);
 	}
