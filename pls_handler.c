@@ -244,8 +244,9 @@ pls_process(struct playlist* pls)
 
 			ret = pls_add_file(delim, &pls->items, &pls->num_items);
 			if(ret < 0) {
-				ret = -1;
-				goto cleanup;
+				utils_wrn(PLS, "couldn't add file: %s\n", delim);
+				/* Non-fatal */
+				ret = 0;
 			}
 		}
 		break;
@@ -265,13 +266,20 @@ pls_process(struct playlist* pls)
 
 			ret = pls_add_file(line, &pls->items, &pls->num_items);
 			if(ret < 0) {
-				ret = -1;
-				goto cleanup;
+				utils_wrn(PLS, "couldn't add file: %s\n", delim);
+				/* Non-fatal */
+				ret = 0;
 			}
 		}
 		break;
 	default:
 		/* Shouldn't reach this */
+		ret = -1;
+		goto cleanup;
+	}
+
+	if (!pls->num_items) {
+		utils_err(PLS, "got empty playlist: %s\n", pls->filepath);
 		ret = -1;
 		goto cleanup;
 	}
