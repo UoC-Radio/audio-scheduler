@@ -290,6 +290,11 @@ cleanup:
 	if(parser_failed) {
 		cfg_free_pls(pls);
 		pls = NULL;
+		/* Not able to parse a fallback playlist is non-fatal */
+		if(!strncmp((const char*) element->name, "Fallback", 9)) {
+			utils_wrn(CFG, "ignoring empty/malformed fallback playlist\n");
+			parser_failed = 0;
+		}
 	}
 	return pls;
 }
@@ -417,6 +422,9 @@ cleanup:
 	if(parser_failed) {
 		cfg_free_ipls(ipls);
 		ipls = NULL;
+		/* Not able to parse an intermediate playlist is non-fatal */
+		utils_wrn(CFG, "ignoring empty/malformed intermediate playlist\n");
+		parser_failed = 0;
 	}
 	return ipls;
 }

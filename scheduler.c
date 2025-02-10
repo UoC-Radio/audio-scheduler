@@ -54,6 +54,9 @@ sched_get_next_item(struct playlist* pls)
 	int idx = 0;
 	char* next = NULL;
 
+	if (!pls)
+		return NULL;
+
 	/* Re-load playlist if needed */
 	ret = pls_reload_if_needed(pls);
 	if(ret < 0) {
@@ -165,6 +168,11 @@ sched_get_next(struct scheduler* sched, time_t sched_time, char** next,
 	for(i = 0; i < zn->num_others && zn->others; i++) {
 		if(sched_is_ipls_ready(zn->others[i], sched_time)) {
 			ipls = zn->others[i];
+			/* Skip failed intermediate playlists */
+			if (!ipls) {
+				utils_dbg(SCHED, "Skipping failed intermediage playlist\n");
+				continue;
+			}
 			/* Only update last_scheduled after we've
 			 * scheduled num_sched_items */
 			if(ipls->sched_items_pending == -1)
@@ -228,6 +236,7 @@ done:
 	}
 
 	/* Nothing we can do */
+	utils_err(SCHED, "could not find anything to schedule\n");
 	return -1;
 }
 
