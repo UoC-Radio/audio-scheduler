@@ -22,7 +22,7 @@
 #include "utils.h"
 #include <stdlib.h>	/* For malloc/realloc/free */
 #include <string.h>	/* For strncmp() and strchr() */
-#include <stdio.h>	/* For FILE handling */
+#include <stdio.h>	/* For FILE handling/getline() */
 #include <limits.h>	/* For PATH_MAX */
 
 enum pls_type {
@@ -177,7 +177,10 @@ pls_files_cleanup(struct playlist* pls)
 int
 pls_process(struct playlist* pls)
 {
-	char line[PATH_MAX] = {0};
+	char* line = NULL;
+	size_t line_size = 0;
+	ssize_t line_len = 0;
+	int line_num = 0;
 	char* delim = NULL;
 	FILE *pls_file = NULL;
 	int type = 0;
@@ -197,6 +200,7 @@ pls_process(struct playlist* pls)
 
 
 	if(!utils_is_readable_file(pls->filepath)) {
+		utils_err(PLS, "Could not read playlist: %s\n", pls->filepath);
 		ret = -1;
 		goto cleanup;
 	}
@@ -219,24 +223,27 @@ pls_process(struct playlist* pls)
 	switch(type) {
 	case TYPE_PLS:
 		/* Grab the first line and see if it's the expected header */
-		if(fgets(line, PATH_MAX, pls_file) != NULL) {
+		line_len = getline(&line, &line_size, pls_file);
+		if (line_len > 0) {
 			utils_trim_string(line);
 			if(strncmp(line, "[playlist]", 11)) {
-				utils_err(PLS, "Invalid header on %s: %s\n",
-					  pls->filepath, line);
+				utils_err(PLS, "Invalid header on %s\n",
+					  pls->filepath);
 				ret = -1;
 				goto cleanup;
 			}
 		}
 
-		while(fgets(line, PATH_MAX, pls_file) != NULL) {
+		line_num = 2;
+		while ((line_len = getline(&line, &line_size, pls_file)) > 0) {
 			/* Not a file */
 			if(strncmp(line, "File", 4))
 				continue;
 
 			delim = strchr(line, '=');
 			if(!delim){
-				utils_err(PLS, "malformed line in pls file: %s\n", line);
+				utils_err(PLS, "malformed line %i in pls file: %s\n",
+					  line_num, pls->filepath);
 				ret = -1;
 				goto cleanup;
 			}
@@ -248,25 +255,21 @@ pls_process(struct playlist* pls)
 				/* Non-fatal */
 				ret = 0;
 			}
+			line_num++;
 		}
 		break;
 	case TYPE_M3U:
-		while(fgets(line, PATH_MAX, pls_file) != NULL) {
+		line_num = 0;
+		while ((line_len = getline(&line, &line_size, pls_file)) > 0) {
+			line_num++;
 			/* EXTINF etc */
 			if(line[0] == '#')
 				continue;
 
-			delim = strchr(line, '=');
-			if(!delim){
-				utils_err(PLS, "malformed line in m3u file: %s\n", line);
-				ret = -1;
-				goto cleanup;
-			}
-			delim++;
-
 			ret = pls_add_file(line, &pls->items, &pls->num_items);
 			if(ret < 0) {
-				utils_wrn(PLS, "couldn't add file: %s\n", delim);
+				utils_wrn(PLS, "couldn't add file on line number %i: %s\n",
+					  line_num, pls->filepath);
 				/* Non-fatal */
 				ret = 0;
 			}
@@ -293,6 +296,9 @@ pls_process(struct playlist* pls)
 cleanup:
 	if(pls_file)
 		fclose(pls_file);
+
+	if (line)
+		free(line);
 
 	if(ret < 0) {
 		if(pls->items)
