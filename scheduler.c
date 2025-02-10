@@ -166,13 +166,15 @@ sched_get_next(struct scheduler* sched, time_t sched_time, char** next,
 	 * playlists are sorted in descending order from higher
 	 * to lower priority. */
 	for(i = 0; i < zn->num_others && zn->others; i++) {
+		/* Skip failed intermediate playlists */
+		if (!zn->others[i]) {
+			utils_dbg(SCHED, "Skipping failed intermediage playlist\n");
+			continue;
+		}
+
 		if(sched_is_ipls_ready(zn->others[i], sched_time)) {
 			ipls = zn->others[i];
-			/* Skip failed intermediate playlists */
-			if (!ipls) {
-				utils_dbg(SCHED, "Skipping failed intermediage playlist\n");
-				continue;
-			}
+
 			/* Only update last_scheduled after we've
 			 * scheduled num_sched_items */
 			if(ipls->sched_items_pending == -1)

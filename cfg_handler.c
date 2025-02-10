@@ -291,7 +291,7 @@ cleanup:
 		cfg_free_pls(pls);
 		pls = NULL;
 		/* Not able to parse a fallback playlist is non-fatal */
-		if(!strncmp((const char*) element->name, "Fallback", 9)) {
+		if(!strncmp((const char*) pls_node->name, "Fallback", 9)) {
 			utils_wrn(CFG, "ignoring empty/malformed fallback playlist\n");
 			parser_failed = 0;
 		}
