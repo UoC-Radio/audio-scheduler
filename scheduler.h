@@ -23,6 +23,19 @@
 
 #include <time.h> /* For time_t */
 
+struct audiofile_info {
+	char* filepath;
+	char* artist;
+	char* album;
+	char* albumid;
+	char* release_trackid;
+	float album_gain;
+	float album_peak;
+	float track_gain;
+	float track_peak;
+	float duration_secs;
+};
+
 struct fader {
 	int	fadein_duration_secs;
 	int	fadeout_duration_secs;
@@ -94,10 +107,13 @@ enum state_flags {
 	SCHED_LOADING_NEW	= 4,
 };
 
+/* File handling */
+void mldr_cleanup_audiofile(struct audiofile_info *info);
+int mldr_init_audiofile(char* filepath, struct audiofile_info *info, int strict);
 
 /* Playlist handling */
 void pls_files_cleanup(struct playlist* pls);
-int pls_shuffle(struct playlist* pls);
+void pls_shuffle(struct playlist* pls);
 int pls_process(struct playlist* pls);
 int pls_reload_if_needed(struct playlist* pls);
 

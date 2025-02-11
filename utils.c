@@ -94,6 +94,8 @@ utils_get_facility_name(int facility)
 		return "[CFG] ";
 	case PLS:
 		return "[PLS] ";
+	case LDR:
+		return "[LDR] ";
 	case SHUF:
 		return "[SHUF] ";
 	case META:

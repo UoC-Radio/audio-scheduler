@@ -135,7 +135,7 @@ pls_file_swap(char** items, int x, int y)
 	items[y] = tmp;
 }
 
-int
+void
 pls_shuffle(struct playlist* pls)
 {
 	unsigned int next_file_idx = 0;
@@ -143,7 +143,7 @@ pls_shuffle(struct playlist* pls)
 
 	/* Nothing to shuffle */
 	if(pls->num_items <= 1)
-		return 0;
+		return;
 
 	/* Shuffle playlist using Durstenfeld's algorithm:
 	 * Pick a random number from the remaining ones,
@@ -160,7 +160,7 @@ pls_shuffle(struct playlist* pls)
 			utils_dbg(SHUF|SKIP, "%i %s\n", i, pls->items[i]);
 	}
 
-	return 0;
+	return;
 }
 
 

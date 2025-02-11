@@ -6,6 +6,7 @@
 #include <signal.h>	/* For sig_atomic_t and signal handling */
 #include <stdlib.h>	/* For strtol() */
 #include <stdio.h>	/* For perror() */
+#include <libavutil/log.h>	/* For av_log_set_level() */
 
 static struct player player = {0};
 
@@ -69,6 +70,8 @@ main(int argc, char **argv)
 
 	utils_set_log_level(dbg_lvl);
 	utils_set_debug_mask(dbg_mask);
+	/* Prevent ffmpeg from spamming us, we report errors anyway */
+	av_log_set_level(AV_LOG_ERROR);
 
 	ret = sched_init(&sched, argv[optind]);
 	if (ret < 0) {

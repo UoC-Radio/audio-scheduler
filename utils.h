@@ -26,23 +26,24 @@
 #include "config.h"
 
 enum facilities {
-	NONE	= 0x0,
-	SCHED	= 0x2,
-	PLR	= 0x4,
-	CFG	= 0x8,
-	PLS	= 0x10,
-	SHUF	= 0x20,
-	UTILS	= 0x40,
-	META	= 0x80,
-	SKIP	= 0x100,
+	NONE	= 0,
+	SCHED	= 1 << 0,
+	PLR	= 1 << 1,
+	CFG	= 1 << 2,
+	PLS	= 1 << 3,
+	LDR	= 1 << 4,
+	SHUF	= 1 << 5,
+	UTILS	= 1 << 6,
+	META	= 1 << 7,
+	SKIP	= 1 << 8,
 };
 
 enum log_levels {
-	SILENT	= 0x0,
-	ERROR	= 0x1,
-	WARN	= 0x2,
-	INFO	= 0x3,
-	DBG	= 0x4,
+	SILENT	= 0,
+	ERROR	= 1,
+	WARN	= 2,
+	INFO	= 3,
+	DBG	= 4,
 };
 
 /* Log configuration */

@@ -16,6 +16,25 @@ AC_ARG_WITH([debug],
 AC_PROG_CC
 
 # Check for libraries
+PKG_CHECK_MODULES(AVFORMAT, [ libavformat >= 5.0 ],
+		[
+			AC_SUBST(AVFORMAT_CFLAGS)
+			AC_SUBST(AVFORMAT_LIBS)
+		],
+		[ AC_MSG_ERROR([libavformat not found]) ])
+PKG_CHECK_MODULES(AVCODEC, [ libavcodec >= 5.0],
+		[
+			AC_SUBST(AVCODEC_CFLAGS)
+			AC_SUBST(AVCODEC_LIBS)
+		],
+		[ AC_MSG_ERROR([libavcodec not found]) ])
+PKG_CHECK_MODULES(AVUTIL, [ libavutil >= 5.0 ],
+		[
+			AC_SUBST(AVUTIL_CFLAGS)
+			AC_SUBST(AVUTIL_LIBS)
+		],
+		[ AC_MSG_ERROR([libavutil not found]) ])
+
 PKG_CHECK_MODULES(GStreamer,
 		   [
 			gstreamer-1.0 >= 1.0.0

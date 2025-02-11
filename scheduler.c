@@ -47,21 +47,21 @@ sched_is_ipls_ready(struct intermediate_playlist* ipls, time_t sched_time)
 	return 1;
 }
 
-static char*
-sched_get_next_item(struct playlist* pls)
+static int
+sched_get_next_item(struct playlist* pls, struct audiofile_info* next_info)
 {
 	int ret = 0;
 	int idx = 0;
 	char* next = NULL;
 
 	if (!pls)
-		return NULL;
+		return -1;
 
 	/* Re-load playlist if needed */
 	ret = pls_reload_if_needed(pls);
 	if(ret < 0) {
-		utils_wrn(SCHED, "Re-loading playlist %s failed\n", pls->filepath);
-		return NULL;
+		utils_err(SCHED, "Re-loading playlist %s failed\n", pls->filepath);
+		return -1;
 	}
 
 	/* We've played the whole list, reset index and
@@ -70,12 +70,7 @@ sched_get_next_item(struct playlist* pls)
 		pls->curr_idx = 0;
 		if(pls->shuffle) {
 			utils_dbg(SCHED, "Re-shuffling playlist\n");
-			ret = pls_shuffle(pls);
-			if (ret < 0) {
-				utils_err(SCHED, "Re-shuffling playlist %s failed\n",
-					  pls->filepath);
-				return NULL;
-			}
+			pls_shuffle(pls);
 		}
 	}
 
@@ -87,12 +82,19 @@ sched_get_next_item(struct playlist* pls)
 		next = pls->items[idx];
 		if(utils_is_readable_file(next)) {
 			pls->curr_idx = idx + 1;
-			return next;
+			ret = mldr_init_audiofile(next, next_info, 1);
+			if (!ret)
+				return 0;
+			else {
+				utils_wrn(SCHED, "Failed to load file: %s\n", next);
+				/* Non fatal */
+				continue;
+			}
 		}
 		utils_wrn(SCHED, "File unreadable %s\n", next);
 	}
 
-	return NULL;
+	return -1;
 }
 
 
@@ -119,6 +121,10 @@ sched_get_next(struct scheduler* sched, time_t sched_time, char** next,
 	int ret = 0;
 	struct tm tm = *localtime(&sched_time);
 	char datestr[26];
+	/* TODO: This will be passed on to the new player when ready */
+	static struct audiofile_info next_info = {0};
+	/* Clean it up from the previous run*/
+	mldr_cleanup_audiofile(&next_info);
 
 	if (!sched)
 		return -1;
@@ -194,23 +200,23 @@ sched_get_next(struct scheduler* sched, time_t sched_time, char** next,
 		}
 	}
 
-	if(pls) {
-		(*next) = sched_get_next_item(pls);
-		if((*next) != NULL) {
-			utils_dbg(SCHED, "Using intermediate playlist\n");
-			if(pls->fader)
-				(*fader) = pls->fader;
-			else
-				(*fader) = NULL;
-			goto done;
-		}
+	ret = sched_get_next_item(pls, &next_info);
+	if(!ret) {
+		utils_dbg(SCHED, "Using intermediate playlist\n");
+		(*next) = next_info.filepath;
+		if(pls->fader)
+			(*fader) = pls->fader;
+		else
+			(*fader) = NULL;
+		goto done;
 	}
 
 	/* Go for the main playlist */
 	pls = zn->main_pls;
-	(*next) = sched_get_next_item(pls);
-	if((*next) != NULL) {
+	ret = sched_get_next_item(pls, &next_info);
+	if(!ret) {
 		utils_dbg(SCHED, "Using main playlist\n");
+		(*next) = next_info.filepath;
 		if(pls->fader)
 			(*fader) = pls->fader;
 		else
@@ -220,9 +226,10 @@ sched_get_next(struct scheduler* sched, time_t sched_time, char** next,
 
 	/* Go for the fallback playlist */
 	pls = zn->fallback_pls;
-	(*next) = sched_get_next_item(pls);
-	if((*next) != NULL) {
+	ret = sched_get_next_item(pls, &next_info);
+	if(!ret) {
 		utils_wrn(SCHED, "Using fallback playlist\n");
+		(*next) = next_info.filepath;
 		if(pls->fader)
 			(*fader) = pls->fader;
 		else
@@ -231,9 +238,9 @@ sched_get_next(struct scheduler* sched, time_t sched_time, char** next,
 	}
 
 done:
-	if((*next) != NULL) {
+	if(!ret) {
 		utils_info(SCHED, "Got next item from zone '%s': %s (fader: %s)\n",
-			zn->name, (*next), (*fader) ? "true" : "false");
+			zn->name, next_info.filepath, (*fader) ? "true" : "false");
 		return 0;
 	}
 
