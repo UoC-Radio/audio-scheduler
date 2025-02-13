@@ -109,7 +109,7 @@ sched_get_next_item(struct playlist* pls, struct audiofile_info* next_info)
  * then we can't do anything about it. */
 
 int
-sched_get_next(struct scheduler* sched, time_t sched_time, char** next,
+sched_get_next(struct scheduler* sched, time_t sched_time, struct audiofile_info* next_info,
 	       struct fader** fader, char** zone)
 {
 	struct playlist *pls = NULL;
@@ -121,10 +121,6 @@ sched_get_next(struct scheduler* sched, time_t sched_time, char** next,
 	int ret = 0;
 	struct tm tm = *localtime(&sched_time);
 	char datestr[26];
-	/* TODO: This will be passed on to the new player when ready */
-	static struct audiofile_info next_info = {0};
-	/* Clean it up from the previous run*/
-	mldr_cleanup_audiofile(&next_info);
 
 	if (!sched)
 		return -1;
@@ -200,10 +196,9 @@ sched_get_next(struct scheduler* sched, time_t sched_time, char** next,
 		}
 	}
 
-	ret = sched_get_next_item(pls, &next_info);
+	ret = sched_get_next_item(pls, next_info);
 	if(!ret) {
 		utils_dbg(SCHED, "Using intermediate playlist\n");
-		(*next) = next_info.filepath;
 		if(pls->fader)
 			(*fader) = pls->fader;
 		else
@@ -213,10 +208,9 @@ sched_get_next(struct scheduler* sched, time_t sched_time, char** next,
 
 	/* Go for the main playlist */
 	pls = zn->main_pls;
-	ret = sched_get_next_item(pls, &next_info);
+	ret = sched_get_next_item(pls, next_info);
 	if(!ret) {
 		utils_dbg(SCHED, "Using main playlist\n");
-		(*next) = next_info.filepath;
 		if(pls->fader)
 			(*fader) = pls->fader;
 		else
@@ -226,10 +220,9 @@ sched_get_next(struct scheduler* sched, time_t sched_time, char** next,
 
 	/* Go for the fallback playlist */
 	pls = zn->fallback_pls;
-	ret = sched_get_next_item(pls, &next_info);
+	ret = sched_get_next_item(pls, next_info);
 	if(!ret) {
 		utils_wrn(SCHED, "Using fallback playlist\n");
-		(*next) = next_info.filepath;
 		if(pls->fader)
 			(*fader) = pls->fader;
 		else
@@ -240,7 +233,7 @@ sched_get_next(struct scheduler* sched, time_t sched_time, char** next,
 done:
 	if(!ret) {
 		utils_info(SCHED, "Got next item from zone '%s': %s (fader: %s)\n",
-			zn->name, next_info.filepath, (*fader) ? "true" : "false");
+			zn->name, next_info->filepath, (*fader) ? "true" : "false");
 		return 0;
 	}
 

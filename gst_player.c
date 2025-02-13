@@ -18,7 +18,7 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "player.h"
+#include "gst_player.h"
 #include "utils.h"
 #include <gst/controller/gstdirectcontrolbinding.h>
 #include <gst/controller/gstinterpolationcontrolsource.h>
@@ -180,7 +180,6 @@ play_queue_item_new (struct player * self, struct play_queue_item * previous)
 {
   struct play_queue_item *item;
   struct fader *fader;
-  gchar *file;
   gchar *zone;
   gchar *uri;
   GError *error = NULL;
@@ -190,6 +189,7 @@ play_queue_item_new (struct player * self, struct play_queue_item * previous)
   GstPad *convert_src, *convert_sink;
   GstPad *ghost;
   GstClockTime offset = 0;
+  struct audiofile_info next_info = {0};
 
   /* ask for the item that would start exactly at the end of the previous item;
    * note that in reality this item may start earlier than the requested time,
@@ -199,15 +199,15 @@ play_queue_item_new (struct player * self, struct play_queue_item * previous)
 
 next:
   /* ask scheduler for the next item */
-  if (sched_get_next (self->scheduler, sched_time, &file, &fader, &zone) != 0) {
+  if (sched_get_next (self->scheduler, sched_time, &next_info, &fader, &zone) != 0) {
     utils_err (PLR, "No more files to play!!\n");
     return NULL;
   }
 
   /* convert to file:// URI */
-  uri = gst_filename_to_uri (file, &error);
+  uri = gst_filename_to_uri (next_info.filepath, &error);
   if (error) {
-    utils_wrn (PLR, "Failed to convert filename '%s' to URI: %s\n", file,
+    utils_wrn (PLR, "Failed to convert filename '%s' to URI: %s\n", next_info.filepath,
         error->message);
     g_clear_error (&error);
     goto next;
@@ -216,7 +216,8 @@ next:
   item = g_new0 (struct play_queue_item, 1);
   item->player = self;
   item->previous = previous;
-  item->file = g_strdup (file);
+  item->file = g_strdup (next_info.filepath);
+  mldr_cleanup_audiofile(&next_info);
 
   utils_dbg (PLR, "item %p: scheduling to play '%s'\n", item, uri);
 
@@ -613,7 +614,7 @@ cleanup_metadata (struct meta_handler *mh)
 }
 
 int
-player_init (struct player* self, struct scheduler* scheduler,
+gst_player_init (struct player* self, struct scheduler* scheduler,
     struct meta_handler *mh, const char *audiosink)
 {
   GstElement *sink = NULL;
@@ -659,7 +660,7 @@ player_init (struct player* self, struct scheduler* scheduler,
 }
 
 void
-player_cleanup (struct player* self)
+gst_player_cleanup (struct player* self)
 {
   g_clear_object (&self->pipeline);
   g_clear_pointer (&self->loop, g_main_loop_unref);
@@ -670,7 +671,7 @@ player_cleanup (struct player* self)
 }
 
 void
-player_loop (struct player* self)
+gst_player_loop (struct player* self)
 {
   GstBus *bus;
   guint timeout_id;
@@ -702,7 +703,7 @@ player_loop (struct player* self)
 }
 
 void
-player_loop_quit (struct player* self)
+gst_player_loop_quit (struct player* self)
 {
   g_main_loop_quit (self->loop);
 }

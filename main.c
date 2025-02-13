@@ -1,5 +1,5 @@
 #include "scheduler.h"
-#include "player.h"
+#include "gst_player.h"
 #include "meta_handler.h"
 #include "utils.h"
 #include <unistd.h>	/* For getopt() */
@@ -16,7 +16,7 @@ static const char * usage_str =
 static void
 signal_handler(int sig, siginfo_t * info, void *extra)
 {
-	player_loop_quit (&player);
+	gst_player_loop_quit (&player);
 }
 
 int
@@ -87,7 +87,7 @@ main(int argc, char **argv)
 		goto cleanup;
 	}
 
-	ret = player_init(&player, &sched, &mh, sink);
+	ret = gst_player_init(&player, &sched, &mh, sink);
 	if (ret < 0) {
 		utils_err(NONE, "Unable to initialize player\n");
 		ret = -3;
@@ -104,12 +104,12 @@ main(int argc, char **argv)
 	sigaction(SIGHUP, &sa, NULL);
 	sigaction(SIGINT, &sa, NULL);
 
-	player_loop(&player);
+	gst_player_loop(&player);
 
 	utils_info(PLR, "Graceful exit...\n");
 
  cleanup:
-	player_cleanup(&player);
+	gst_player_cleanup(&player);
 	sched_cleanup(&sched);
 	meta_handler_destroy(&mh);
 	return ret;

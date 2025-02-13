@@ -123,7 +123,7 @@ int cfg_process(struct config *cfg);
 int cfg_reload_if_needed(struct config *cfg);
 
 /* Scheduler entry points */
-int sched_get_next(struct scheduler* sched, time_t sched_time, char** next, struct fader** fader, char ** zone);
+int sched_get_next(struct scheduler* sched, time_t sched_time, struct audiofile_info * next_info, struct fader** fader, char ** zone);
 int sched_init(struct scheduler* sched, char* config_filepath);
 void sched_cleanup(struct scheduler* sched);
 

@@ -66,11 +66,11 @@ struct player
   struct play_queue_item *playlist;
 };
 
-int player_init (struct player* self, struct scheduler* scheduler,
+int gst_player_init (struct player* self, struct scheduler* scheduler,
     struct meta_handler *mh, const char *audiosink);
-void player_cleanup (struct player* self);
+void gst_player_cleanup (struct player* self);
 
-void player_loop (struct player* self);
-void player_loop_quit (struct player* self);
+void gst_player_loop (struct player* self);
+void gst_player_loop_quit (struct player* self);
 
 #endif /* __PLAYER_H__ */
