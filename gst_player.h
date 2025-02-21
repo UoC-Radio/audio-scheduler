@@ -35,7 +35,7 @@ struct play_queue_item
 
   /* info we got from the scheduler */
   gchar *file;
-  struct fader fader;
+  struct fader_info fader;
   gchar *zone;
 
   /* info we discovered; rt = running time */

@@ -1,29 +1,23 @@
 /*
- * Audio Scheduler - An audio clip scheduler for use in radio broadcasting
- * Playlist data handler
+ * SPDX-FileType: SOURCE
  *
- * Copyright (C) 2016 Nick Kossifidis <mickflemm@gmail.com>
+ * SPDX-FileCopyrightText: 2016 - 2025 Nick Kossifidis <mickflemm@gmail.com>
  *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
-#include "scheduler.h"
-#include "utils.h"
-#include <stdlib.h>	/* For malloc/realloc/free */
+/*
+ * This part parses a playlist file (m3u and pls are supported) and populates
+ * a playlist struct, it also supports shuffling the playlist, and does some
+ * basic checks to make sure each file exists and is readable.
+ */
+
+ #include <stdlib.h>	/* For malloc/realloc/free */
 #include <string.h>	/* For strncmp() and strchr() */
 #include <stdio.h>	/* For FILE handling/getline() */
 #include <limits.h>	/* For PATH_MAX */
+#include "scheduler.h"
+#include "utils.h"
 
 enum pls_type {
 	TYPE_PLS = 1,
@@ -153,11 +147,11 @@ pls_shuffle(struct playlist* pls)
 		pls_file_swap(pls->items, next_file_idx, target_slot);
 	}
 
-	if(utils_is_debug_enabled(SHUF)) {
-		utils_dbg(SHUF, "--== Shuffled list ==--\n");
+	if(utils_is_debug_enabled(PLS)) {
+		utils_dbg(PLS, "--== Shuffled list ==--\n");
 		int i = 0;
 		for(i = 0; i < pls->num_items; i++)
-			utils_dbg(SHUF|SKIP, "%i %s\n", i, pls->items[i]);
+			utils_dbg(PLS|SKIP, "%i %s\n", i, pls->items[i]);
 	}
 
 	return;

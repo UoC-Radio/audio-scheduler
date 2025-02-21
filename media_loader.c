@@ -1,28 +1,22 @@
 /*
- * Audio Scheduler - An audio clip scheduler for use in radio broadcasting
- * Media file loader / integrity checker
+ * SPDX-FileType: SOURCE
  *
- * Copyright (C) 2025 Nick Kossifidis <mickflemm@gmail.com>
+ * SPDX-FileCopyrightText: 2025 Nick Kossifidis <mickflemm@gmail.com>
  *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * SPDX-License-Identifier: GPL-3.0-or-later
  */
-#include <libavformat/avformat.h>
-#include <libavcodec/avcodec.h>
-#include <libavutil/dict.h>
 
+/*
+ * This part loads and pre-processes audio files before passing them on to the player.
+ * It performs metadata parsing, integrity checking, and accurate duration calculation.
+ */
+
+#include <libavformat/avformat.h>	/* For AVFormat / demuxer */
+#include <libavcodec/avcodec.h>		/* For AvDecoder / decoder */
+#include <libavutil/dict.h>		/* For av_dict* */
 #include "scheduler.h"
 #include "utils.h"
+
 
 /*********\
 * HELPERS *
@@ -31,6 +25,7 @@
 typedef enum {
 	ARTIST,
 	ALBUM,
+	TITLE,
 	ALBUM_GAIN,
 	ALBUM_PEAK,
 	ALBUM_ID,
@@ -43,7 +38,7 @@ typedef enum {
 static char*
 mldr_get_tag(AVDictionary *metadata, AudioTagType tag_type)
 {
-	char tag_name[64];
+	char tag_name[128];
 	AVDictionaryEntry *tag = NULL;
 
 	if (!metadata)
@@ -57,6 +52,10 @@ mldr_get_tag(AVDictionary *metadata, AudioTagType tag_type)
 		break;
 	case ALBUM:
 		snprintf(tag_name, sizeof(tag_name), "ALBUM");
+		tag = av_dict_get(metadata, tag_name, NULL, 0);
+		break;
+	case TITLE:
+		snprintf(tag_name, sizeof(tag_name), "TITLE");
 		tag = av_dict_get(metadata, tag_name, NULL, 0);
 		break;
 	case ALBUM_GAIN:
@@ -111,17 +110,49 @@ mldr_get_replaygain_tag(AVDictionary *metadata, AudioTagType tag_type)
 	if (!str_val)
 		return 0.0f;
 
-	if (sscanf(str_val, "%f", &db_val) == 1) {
-            return db_val;
-        } else
-            utils_wrn(LDR, "Invalid ReplayGain format: %s\n", str_val);
+	if (sscanf(str_val, "%f", &db_val) != 1) {
+		utils_wrn(LDR, "Invalid ReplayGain format: %s\n", str_val);
+		db_val = 0.0f;
+	}
 
-	return 0.0f;
+	free(str_val);
+	return db_val;
+}
+
+
+/**************\
+* ENTRY POINTS *
+\**************/
+
+void
+mldr_copy_audiofile(struct audiofile_info *dst, struct audiofile_info *src)
+{
+	dst->filepath = src->filepath ? strdup(src->filepath) : NULL;
+	dst->artist = src->artist ? strdup(src->artist) : NULL;
+	dst->album = src->album ? strdup(src->album) : NULL;
+	dst->title = src->title ? strdup(src->title) : NULL;
+	dst->albumid = src->albumid ? strdup(src->albumid) : NULL;
+	dst->release_trackid = src->release_trackid ? strdup(src->release_trackid) : NULL;
+	dst->album_gain = src->album_gain;
+	dst->album_peak = src->album_peak;
+	dst->track_gain = src->track_gain;
+	dst->track_peak = src->track_peak;
+	dst->duration_secs = src->duration_secs;
+	dst->zone_name = src->zone_name ? strdup(src->zone_name) : NULL;
+	/* No need to cary this around outside the player */
+	dst->fader_info = NULL;
+	dst->is_copy = 1;
 }
 
 void
 mldr_cleanup_audiofile(struct audiofile_info *info)
 {
+	/* Note: const pointers come from pls/zone so don't free them
+	 * unless they are copies, or we'll corrupt pls/zone structs. */
+
+	 if (info->is_copy && info->filepath)
+		free((char*) info->filepath);
+	info->filepath = NULL;
 	if(info->artist) {
 		free(info->artist);
 		info->artist = NULL;
@@ -129,6 +160,10 @@ mldr_cleanup_audiofile(struct audiofile_info *info)
 	if(info->album) {
 		free(info->album);
 		info->album = NULL;
+	}
+	if(info->title) {
+		free(info->title);
+		info->title = NULL;
 	}
 	if(info->albumid) {
 		free(info->albumid);
@@ -138,15 +173,25 @@ mldr_cleanup_audiofile(struct audiofile_info *info)
 		free(info->release_trackid);
 		info->release_trackid = NULL;
 	}
+	if (info->is_copy && info->zone_name)
+		free((char*) info->zone_name);
+	info->zone_name = NULL;
+	info->fader_info = NULL;
 }
 
-int mldr_init_audiofile(char* filepath, struct audiofile_info *info, int strict) {
+int mldr_init_audiofile(char* filepath, const char* zone_name, const struct fader_info *fdr, struct audiofile_info *info, int strict) {
 	AVFormatContext *format_ctx = NULL;
 	AVCodecContext *codec_ctx = NULL;
 	int ret = 0;
 
+	memset(info, 0, sizeof(struct audiofile_info));
+
 	/* We 've already checked that this is a readable file */
 	info->filepath = filepath;
+
+	/* Set zone_name and fader_info from the scheduler */
+	info->fader_info = fdr;
+	info->zone_name = zone_name;
 
 	if (avformat_open_input(&format_ctx, info->filepath, NULL, NULL) != 0) {
 		utils_err(LDR, "Could not open file %s\n", info->filepath);
@@ -154,22 +199,15 @@ int mldr_init_audiofile(char* filepath, struct audiofile_info *info, int strict)
 		goto cleanup;
 	}
 
+	/* Find the audio stream inside the file */
 	if (avformat_find_stream_info(format_ctx, NULL) < 0) {
 		utils_err(LDR, "Could not get stream info for %s\n", info->filepath);
 		ret = -1;
 		goto cleanup;
 	}
 
-	/* Find the audio stream inside the file */
-	int audio_stream_index = -1;
-	for (unsigned int i = 0; i < format_ctx->nb_streams; i++) {
-		if (format_ctx->streams[i]->codecpar->codec_type == AVMEDIA_TYPE_AUDIO) {
-			audio_stream_index = i;
-			break;
-		}
-	}
-
-	if (audio_stream_index == -1) {
+	int audio_stream_index = av_find_best_stream(format_ctx, AVMEDIA_TYPE_AUDIO, -1, -1, NULL, 0);
+	if (audio_stream_index < 0) {
 		utils_err(LDR, "Could not find audio stream in %s\n", info->filepath);
 		ret = -1;
 		goto cleanup;
@@ -198,6 +236,7 @@ int mldr_init_audiofile(char* filepath, struct audiofile_info *info, int strict)
 	/* Grab metadata */
 	info->artist = mldr_get_tag(format_ctx->metadata, ARTIST);
 	info->album = mldr_get_tag(format_ctx->metadata, ALBUM);
+	info->title = mldr_get_tag(format_ctx->metadata, TITLE);
 	info->albumid = mldr_get_tag(format_ctx->metadata, ALBUM_ID);
 	info->release_trackid = mldr_get_tag(format_ctx->metadata, RELEASE_TID);
 
@@ -211,7 +250,7 @@ int mldr_init_audiofile(char* filepath, struct audiofile_info *info, int strict)
 	 * and use whatever values ffmpeg gave us, if it didn't, go for it. */
 	if (!strict) {
 		if (format_ctx->duration != AV_NOPTS_VALUE) {
-			info->duration_secs = (float)format_ctx->duration / AV_TIME_BASE;
+			info->duration_secs = format_ctx->duration / AV_TIME_BASE;
 			ret = 0;
 			goto cleanup;
 		}
@@ -223,6 +262,7 @@ int mldr_init_audiofile(char* filepath, struct audiofile_info *info, int strict)
 	 * it again it'll get it (or most of it) from the cache instead of readingit again, so consider
 	 * this also as a form of pre-buffering. */
 	info->duration_secs = 0;
+	double duration_secs_frac = 0.0f;
 	int frame_count = 0;
 	int decode_errors = 0;
 	AVFrame *frame = av_frame_alloc();
@@ -241,6 +281,8 @@ int mldr_init_audiofile(char* filepath, struct audiofile_info *info, int strict)
 				av_packet_unref(&packet);
 				break;
 			}
+			/* Safe to unref here, decoder has a copy */
+			av_packet_unref(&packet);
 
 			/* Receive frames from the decoder */
 			while (ret >= 0) {
@@ -253,20 +295,21 @@ int mldr_init_audiofile(char* filepath, struct audiofile_info *info, int strict)
 					break;
 				else if (ret < 0) {
 					decode_errors++;
-					utils_wrn(LDR, "Error receiving frame from decoder: %s (frame %d)\n",
+					utils_wrn(LDR, "Error receiving frame from decoder: %s (last frame %d)\n",
 						 av_err2str(ret), frame_count);
 					break;
 				} else {
-					info->duration_secs += (float)(frame->nb_samples * av_q2d(codec_ctx->time_base));
+					duration_secs_frac += (double)frame->nb_samples * av_q2d(codec_ctx->time_base);
 					frame_count++;
 					av_frame_unref(frame);
 				}
 			}
 		}
-		av_packet_unref(&packet);
 	}
 	ret = 0;
 	av_frame_free(&frame);
+	/* Round duration_secs_frac to the closest higher integer */
+	info->duration_secs = (time_t)(duration_secs_frac + 0.5f);
 
 	if (decode_errors > 0) {
 		utils_err(LDR, "File %s has %d decoding errors.\n", info->filepath, decode_errors);
@@ -281,15 +324,12 @@ int mldr_init_audiofile(char* filepath, struct audiofile_info *info, int strict)
 
 	/* Compare calculated duration with metadata duration (if available) */
 	if (format_ctx->duration != AV_NOPTS_VALUE) {
-		float metadata_duration_seconds = (float)format_ctx->duration / AV_TIME_BASE;
-		float duration_difference = fabsf(info->duration_secs - metadata_duration_seconds);
-
-		const float DURATION_TOLERANCE_PERCENTAGE = 0.01f; // 1% tolerance
-		float duration_tolerance_seconds = metadata_duration_seconds * DURATION_TOLERANCE_PERCENTAGE;
-
-		if (duration_difference > duration_tolerance_seconds) {
-			utils_wrn(LDR, "Duration mismatch in %s: Metadata: %.3f seconds, Calculated: %.3f seconds (Difference: %.3f seconds, Tolerance: %.3f seconds)\n",
-			info->filepath, metadata_duration_seconds, info->duration_secs, duration_difference, duration_tolerance_seconds);
+		time_t metadata_duration_seconds = format_ctx->duration / AV_TIME_BASE;
+		int difference = abs((int)(info->duration_secs - metadata_duration_seconds));
+		int tolerance_secs = 1;
+		if (difference > tolerance_secs) {
+			utils_wrn(LDR, "Duration mismatch in %s: Metadata: %lu seconds, Calculated: %lu seconds (tolerance: %i secs)\n",
+			info->filepath, metadata_duration_seconds, info->duration_secs, tolerance_secs);
 		}
 	} else {
 		utils_wrn(LDR, "No Duration Metadata in %s\n", info->filepath);
@@ -314,13 +354,14 @@ cleanup:
 		utils_dbg(LDR, "File: %s\n", info->filepath);
 		utils_dbg(LDR, "Artist: %s\n", info->artist ? info->artist : "N/A");
 		utils_dbg(LDR, "Album: %s\n", info->album ? info->album : "N/A");
+		utils_dbg(LDR, "Title: %s\n", info->title ? info->title : "N/A");
 		utils_dbg(LDR, "Album ID: %s\n", info->albumid ? info->albumid : "N/A");
 		utils_dbg(LDR, "Release Track ID: %s\n", info->release_trackid ? info->release_trackid : "N/A");
 		utils_dbg(LDR, "Album Gain: %f\n", info->album_gain);
 		utils_dbg(LDR, "Album Peak: %f\n", info->album_peak);
 		utils_dbg(LDR, "Track Gain: %f\n", info->track_gain);
 		utils_dbg(LDR, "Track Peak: %f\n", info->track_peak);
-		utils_dbg(LDR, "Duration: %f\n", info->duration_secs);
+		utils_dbg(LDR, "Duration: %u\n", info->duration_secs);
 	}
 
 	return ret;

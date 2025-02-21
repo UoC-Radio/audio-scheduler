@@ -1,46 +1,44 @@
 /*
- * Audio Scheduler - An audio clip scheduler for use in radio broadcasting
- * Main header file
+ * SPDX-FileType: SOURCE
  *
- * Copyright (C) 2016 Nick Kossifidis <mickflemm@gmail.com>
+ * SPDX-FileCopyrightText: 2016 - 2025 Nick Kossifidis <mickflemm@gmail.com>
  *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * SPDX-License-Identifier: GPL-3.0-or-later
  */
-
 #ifndef __SCHEDULER_H__
 #define __SCHEDULER_H__
 
 #include <time.h> /* For time_t */
 
+struct fader_info {
+	int	fadein_duration_secs;
+	int	fadeout_duration_secs;
+};
+
 struct audiofile_info {
-	char* filepath;
+	const char* filepath;	/* from pls->items[] */
+
 	char* artist;
 	char* album;
+	char* title;
 	char* albumid;
 	char* release_trackid;
+
 	float album_gain;
 	float album_peak;
 	float track_gain;
 	float track_peak;
-	float duration_secs;
-};
 
-struct fader {
-	int	fadein_duration_secs;
-	int	fadeout_duration_secs;
-	float	min_lvl;
-	float	max_lvl;
+	time_t duration_secs;
+
+	/* zone->name of current zone */
+	const char* zone_name;
+	/* playlist->fader of current playlist*/
+	const struct fader_info *fader_info;
+
+	/* Marks a clone, where all string fields are copies,
+	 * and so should be freed. */
+	int is_copy;
 };
 
 struct playlist {
@@ -50,7 +48,7 @@ struct playlist {
 	int	shuffle;
 	time_t	last_mtime;
 	int	curr_idx;
-	struct fader *fader;
+	struct fader_info *fader;
 };
 
 struct intermediate_playlist {
@@ -108,8 +106,9 @@ enum state_flags {
 };
 
 /* File handling */
+void mldr_copy_audiofile(struct audiofile_info *dst, struct audiofile_info *src);
 void mldr_cleanup_audiofile(struct audiofile_info *info);
-int mldr_init_audiofile(char* filepath, struct audiofile_info *info, int strict);
+int mldr_init_audiofile(char* filepath, const char* zone_name, const struct fader_info *fdr, struct audiofile_info *info, int strict);
 
 /* Playlist handling */
 void pls_files_cleanup(struct playlist* pls);
@@ -123,7 +122,7 @@ int cfg_process(struct config *cfg);
 int cfg_reload_if_needed(struct config *cfg);
 
 /* Scheduler entry points */
-int sched_get_next(struct scheduler* sched, time_t sched_time, struct audiofile_info * next_info, struct fader** fader, char ** zone);
+int sched_get_next(struct scheduler* sched, time_t sched_time, struct audiofile_info* next_info);
 int sched_init(struct scheduler* sched, char* config_filepath);
 void sched_cleanup(struct scheduler* sched);
 

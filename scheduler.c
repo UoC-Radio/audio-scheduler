@@ -1,26 +1,22 @@
 /*
- * Audio Scheduler - An audio clip scheduler for use in radio broadcasting
- * Scheduler core
+ * SPDX-FileType: SOURCE
  *
- * Copyright (C) 2016 Nick Kossifidis <mickflemm@gmail.com>
+ * SPDX-FileCopyrightText: 2016 - 2025 Nick Kossifidis <mickflemm@gmail.com>
  *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
+/*
+ * This part is the scheduler core, based on the currently loaded config, it provides
+ * a audiofile_info struct to the player, to be played at a provided time_t. This allows
+ * the player to ask for songs to be played in the future, or at an updated time e.g.
+ * after pause/resume.
+ */
+
+#include <stdlib.h>	/* For malloc */
+#include <string.h>	/* For memset */
 #include "scheduler.h"
 #include "utils.h"
-#include <stdlib.h>	/* For malloc */
 
 /*********\
 * HELPERS *
@@ -33,6 +29,9 @@ sched_is_ipls_ready(struct intermediate_playlist* ipls, time_t sched_time)
 	struct tm ipls_rdy_tm = *localtime(&ipls->last_scheduled);
 	int mins = ipls_rdy_tm.tm_min;
 	int ret = 0;
+
+	if (!ipls)
+		return 0;
 
 	/* Add interval to ipls ready time */
 	mins += ipls->sched_interval_mins;
@@ -48,7 +47,7 @@ sched_is_ipls_ready(struct intermediate_playlist* ipls, time_t sched_time)
 }
 
 static int
-sched_get_next_item(struct playlist* pls, struct audiofile_info* next_info)
+sched_get_next_item(struct audiofile_info* next_info, struct playlist* pls, const char* zone_name)
 {
 	int ret = 0;
 	int idx = 0;
@@ -82,7 +81,7 @@ sched_get_next_item(struct playlist* pls, struct audiofile_info* next_info)
 		next = pls->items[idx];
 		if(utils_is_readable_file(next)) {
 			pls->curr_idx = idx + 1;
-			ret = mldr_init_audiofile(next, next_info, 1);
+			ret = mldr_init_audiofile(next, zone_name, pls->fader, next_info, 1);
 			if (!ret)
 				return 0;
 			else {
@@ -109,8 +108,7 @@ sched_get_next_item(struct playlist* pls, struct audiofile_info* next_info)
  * then we can't do anything about it. */
 
 int
-sched_get_next(struct scheduler* sched, time_t sched_time, struct audiofile_info* next_info,
-	       struct fader** fader, char** zone)
+sched_get_next(struct scheduler* sched, time_t sched_time, struct audiofile_info* next_info)
 {
 	struct playlist *pls = NULL;
 	struct intermediate_playlist *ipls = NULL;
@@ -131,8 +129,10 @@ sched_get_next(struct scheduler* sched, time_t sched_time, struct audiofile_info
 
 	/* Reload config if needed */
 	ret = cfg_reload_if_needed(sched->cfg);
-	if(ret < 0)
+	if(ret < 0) {
 		utils_wrn(SCHED, "Re-loading config failed\n");
+		return -1;
+	}
 
 	/* Get current day */
 	ws = sched->cfg->ws;
@@ -155,7 +155,6 @@ sched_get_next(struct scheduler* sched, time_t sched_time, struct audiofile_info
 		if(ret > 0)
 			break;
 	}
-	(*zone) = zn->name;
 
 	if(i < 0) {
 		utils_wrn(SCHED, "Nothing is scheduled for now ");
@@ -168,12 +167,6 @@ sched_get_next(struct scheduler* sched, time_t sched_time, struct audiofile_info
 	 * playlists are sorted in descending order from higher
 	 * to lower priority. */
 	for(i = 0; i < zn->num_others && zn->others; i++) {
-		/* Skip failed intermediate playlists */
-		if (!zn->others[i]) {
-			utils_dbg(SCHED, "Skipping failed intermediage playlist\n");
-			continue;
-		}
-
 		if(sched_is_ipls_ready(zn->others[i], sched_time)) {
 			ipls = zn->others[i];
 
@@ -190,50 +183,39 @@ sched_get_next(struct scheduler* sched, time_t sched_time, struct audiofile_info
 			}
 			utils_dbg(SCHED, "Pending items: %i\n",
 				  ipls->sched_items_pending);
+
 			pls = (struct playlist*) ipls;
 			ipls->sched_items_pending--;
 			break;
 		}
 	}
 
-	ret = sched_get_next_item(pls, next_info);
+	ret = sched_get_next_item(next_info, pls, zn->name);
 	if(!ret) {
 		utils_dbg(SCHED, "Using intermediate playlist\n");
-		if(pls->fader)
-			(*fader) = pls->fader;
-		else
-			(*fader) = NULL;
 		goto done;
 	}
 
 	/* Go for the main playlist */
 	pls = zn->main_pls;
-	ret = sched_get_next_item(pls, next_info);
+	ret = sched_get_next_item(next_info, pls, zn->name);
 	if(!ret) {
 		utils_dbg(SCHED, "Using main playlist\n");
-		if(pls->fader)
-			(*fader) = pls->fader;
-		else
-			(*fader) = NULL;
 		goto done;
 	}
 
 	/* Go for the fallback playlist */
 	pls = zn->fallback_pls;
-	ret = sched_get_next_item(pls, next_info);
+	ret = sched_get_next_item(next_info, pls, zn->name);
 	if(!ret) {
 		utils_wrn(SCHED, "Using fallback playlist\n");
-		if(pls->fader)
-			(*fader) = pls->fader;
-		else
-			(*fader) = NULL;
 		goto done;
 	}
 
 done:
 	if(!ret) {
 		utils_info(SCHED, "Got next item from zone '%s': %s (fader: %s)\n",
-			zn->name, next_info->filepath, (*fader) ? "true" : "false");
+			zn->name, next_info->filepath, pls->fader ? "true" : "false");
 		return 0;
 	}
 
@@ -248,6 +230,8 @@ sched_init(struct scheduler* sched, char* config_filepath)
 	struct config *cfg = NULL;
 	int ret = 0;
 
+	memset(sched, 0, sizeof(struct scheduler));
+
 	cfg = (struct config*) malloc(sizeof(struct config));
 	if(!cfg) {
 		utils_err(SCHED, "Could not allocate config structure\n");
@@ -261,6 +245,8 @@ sched_init(struct scheduler* sched, char* config_filepath)
 		return -1;
 
 	sched->cfg = cfg;
+
+	utils_dbg(SCHED, "Initialized\n");
 	return 0;
 }
 

@@ -1,26 +1,17 @@
 /*
- * Audio Scheduler - An audio clip scheduler for use in radio broadcasting
- * Config data handler
+ * SPDX-FileType: SOURCE
  *
- * Copyright (C) 2016 Nick Kossifidis <mickflemm@gmail.com>
+ * SPDX-FileCopyrightText: 2016 - 2025 Nick Kossifidis <mickflemm@gmail.com>
  *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ */
+
+/*
+ * Configuration data handler, this is the part that parses the XML schedule of
+ * the week, that includes days -> zones -> playlists.
  */
 
 #define _XOPEN_SOURCE		/* Needed for strptime() */
-#include "scheduler.h"
-#include "utils.h"
 #include <string.h>		/* For memset() / strncmp() */
 #include <time.h>		/* For strptime() and time() */
 #include <signal.h>		/* For sig_atomic_t */
@@ -29,6 +20,8 @@
 #include <libxml/tree.h>	/* For grabbing stuff off the tree */
 #include <libxml/valid.h>	/* For validation context etc */
 #include <libxml/xmlschemas.h>	/* For schema context etc */
+#include "scheduler.h"
+#include "utils.h"
 
 static volatile sig_atomic_t	parser_failed = 0;
 
@@ -49,28 +42,6 @@ cfg_get_string(xmlDocPtr config, xmlNodePtr element)
 
 	utils_dbg(CFG, "Got string: %s\n", value);
 	return value;
-}
-
-static float
-cfg_get_float(xmlDocPtr config, xmlNodePtr element)
-{
-	float ret = 0;
-	char* end_ptr = NULL;
-	char* value = cfg_get_string(config, element);
-	if(parser_failed)
-		return -1.0;
-
-	ret = strtof(value, &end_ptr);
-	if(value == end_ptr) {
-		utils_perr(CFG, "Failed to parse float");
-		xmlFree(value);
-		parser_failed = 1;
-		return -1.0;
-	}
-
-	xmlFree(value);
-	utils_dbg(CFG, "Got float: %g\n", ret);
-	return ret;
 }
 
 static int
@@ -138,15 +109,15 @@ cfg_get_start_attr(xmlDocPtr config, xmlNodePtr element, struct tm *time)
 \****************/
 
 static void
-cfg_free_fader(struct fader *fdr)
+cfg_free_fader(struct fader_info *fdr)
 {
 	free(fdr);
 }
 
-static struct fader*
+static struct fader_info*
 cfg_get_fader(xmlDocPtr config, xmlNodePtr fdr_node)
 {
-	struct fader *fdr = NULL;
+	struct fader_info *fdr = NULL;
 	xmlNodePtr element = NULL;
 	int failed = 0;
 
@@ -155,13 +126,13 @@ cfg_get_fader(xmlDocPtr config, xmlNodePtr fdr_node)
 
 	/* Allocate a new fader structure and
 	 * zero it out */
-	fdr = (struct fader*) malloc(sizeof(struct fader));
+	fdr = (struct fader_info*) malloc(sizeof(struct fader_info));
 	if (!fdr) {
 		utils_err(CFG, "Unable to allocate fader structure !\n");
 		parser_failed = 1;
 		return NULL;
 	}
-	memset(fdr, 0, sizeof(struct fader));
+	memset(fdr, 0, sizeof(struct fader_info));
 
 	/* Fill it up */
 	element = fdr_node->xmlChildrenNode;
@@ -170,10 +141,6 @@ cfg_get_fader(xmlDocPtr config, xmlNodePtr fdr_node)
 			fdr->fadein_duration_secs = cfg_get_integer(config, element);
 		else if(!strncmp((const char*) element->name, "FadeOutDurationSecs", 20))
 			fdr->fadeout_duration_secs = cfg_get_integer(config, element);
-		else if(!strncmp((const char*) element->name, "MinLevel", 9))
-			fdr->min_lvl = cfg_get_float(config, element);
-		else if(!strncmp((const char*) element->name, "MaxLevel", 9))
-			fdr->max_lvl = cfg_get_float(config, element);
 		if(parser_failed) {
 			utils_err(CFG, "Parsing of fader element failed\n");
 			parser_failed = 1;
@@ -192,11 +159,8 @@ cfg_get_fader(xmlDocPtr config, xmlNodePtr fdr_node)
 	}
 
 	utils_dbg(CFG, "Got fader\n\tFade in duration (secs): %i\n\t"
-			"Fade out duration (secs): %i\n\t"
-			"Minimum level: %g\n\t"
-			"Maximum level: %g\n",
-			fdr->fadein_duration_secs, fdr->fadeout_duration_secs,
-			fdr->min_lvl, fdr->max_lvl);
+			"Fade out duration (secs): %i\n\t",
+			fdr->fadein_duration_secs, fdr->fadeout_duration_secs);
 
 cleanup:
 	if(parser_failed || failed) {
@@ -530,7 +494,7 @@ cfg_get_zone(xmlDocPtr config, xmlNodePtr zone_node)
 			struct intermediate_playlist **new_ptr = realloc(zn->others, ((zn->num_others + 1) *
 									 (sizeof(struct intermediate_playlist*))));
 			if(!new_ptr) {
-				utils_err(CFG, "Could not re-alloc zone!\n");
+				utils_err(CFG, "Could not re-alloc zone->others!\n");
 				parser_failed = 1;
 				goto cleanup;
 			}
@@ -539,6 +503,10 @@ cfg_get_zone(xmlDocPtr config, xmlNodePtr zone_node)
 
 			/* Grab and store the ipls */
 			zn->others[zn->num_others - 1] = cfg_get_ipls(config,element);
+
+			/* We got an empty ipls, re-use that slot for the next one */
+			if (!zn->others[zn->num_others - 1])
+				zn->num_others--;
 		}
 		if(parser_failed) {
 			utils_err(CFG, "Parsing of zone %s failed\n", zn->name);
@@ -968,7 +936,7 @@ cfg_reload_if_needed(struct config *cfg)
 
 	utils_info(CFG, "Got different mtime, reloading %s\n", cfg->filepath);
 
-	/* Re-load playlist */
+	/* Re-load config */
 	cfg_cleanup(cfg);
 	return cfg_process(cfg);
 }

@@ -1,21 +1,13 @@
 /*
- * Audio Scheduler - An audio clip scheduler for use in radio broadcasting
- * Various utilities/helpers
+ * SPDX-FileType: SOURCE
  *
- * Copyright (C) 2016 Nick Kossifidis <mickflemm@gmail.com>
+ * SPDX-FileCopyrightText: 2016 Nick Kossifidis <mickflemm@gmail.com>
  *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ */
+
+/*
+ * This part includes various utility functions for convinience
  */
 
 #define _GNU_SOURCE	/* Needed for vasprintf() */
@@ -96,8 +88,8 @@ utils_get_facility_name(int facility)
 		return "[PLS] ";
 	case LDR:
 		return "[LDR] ";
-	case SHUF:
-		return "[SHUF] ";
+	case SIGDISP:
+		return "[SIGDISP] ";
 	case META:
 		return "[META] ";
 	case UTILS:
@@ -412,11 +404,11 @@ utils_is_regular_file(char* filepath)
 	int ret = 1;
 
 	ret = stat(filepath, &st);
-	if (!S_ISREG(st.st_mode)) {
-		utils_wrn(UTILS, "Not a regular file: %s\n", filepath);
-		ret = 0;
-	} else if (ret < 0) {
+	if (ret < 0) {
 		utils_pwrn(UTILS, "Could not stat(%s)", filepath);
+		ret = 0;
+	} else if (!S_ISREG(st.st_mode)) {
+		utils_wrn(UTILS, "Not a regular file: %s\n", filepath);
 		ret = 0;
 	}
 
@@ -473,7 +465,6 @@ utils_compare_time(struct tm *tm1, struct tm* tm0, int no_date)
 
 	if (errno != 0)
 		utils_perr(UTILS, "compare_time");
-	utils_dbg(UTILS, "compare_time: (t1: %li) - (t0: %li) = %lf\n", t1, t0, diff);
 
 	if(diff > 0.0L)
 		return 1;

@@ -1,41 +1,50 @@
-#include "scheduler.h"
-#include "gst_player.h"
-#include "meta_handler.h"
-#include "utils.h"
+/*
+ * SPDX-FileType: SOURCE
+ *
+ * SPDX-FileCopyrightText: 2016 - 2025 Nick Kossifidis <mickflemm@gmail.com>
+ * SPDX-FileCopyrightText: 2017 George Kiagiadakis <gkiagia@tolabaki.gr>
+ *
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ */
+
 #include <unistd.h>	/* For getopt() */
 #include <signal.h>	/* For sig_atomic_t and signal handling */
 #include <stdlib.h>	/* For strtol() */
 #include <stdio.h>	/* For perror() */
 #include <libavutil/log.h>	/* For av_log_set_level() */
+#include "utils.h"
+#include "scheduler.h"
+//#include "gst_player.h"
+#include "fsp_player.h"
+#include "meta_handler.h"
+#include "sig_dispatcher.h"
 
-static struct player player = {0};
+//static const char * usage_str =
+//  "Usage: %s [-s audio_sink_bin] [-d debug_level] [-m debug_mask] [-p port] <config_file>\n";
 
 static const char * usage_str =
-  "Usage: %s [-s audio_sink_bin] [-d debug_level] [-m debug_mask] [-p port] <config_file>\n";
-
-static void
-signal_handler(int sig, siginfo_t * info, void *extra)
-{
-	gst_player_loop_quit (&player);
-}
+  "Usage: %s [-d debug_level] [-m debug_mask] [-p port] <config_file>\n";
 
 int
 main(int argc, char **argv)
 {
 	struct scheduler sched = {0};
-	struct sigaction sa = {0};
 	struct meta_handler mh = {0};
+	struct fsp_player fsp = {0};
+	struct sig_dispatcher sd = {0};
 	int ret = 0, opt, tmp;
 	int dbg_lvl = INFO;
 	int dbg_mask = PLR|SCHED|META;
 	uint16_t port = 9670;
-	char *sink = NULL;
+	//char *sink = NULL;
 
 	while ((opt = getopt(argc, argv, "s:d:m:p:")) != -1) {
 		switch (opt) {
+		/*
 		case 's':
 			sink = optarg;
 			break;
+		*/
 		case 'd':
 			tmp = strtol(optarg, NULL, 10);
 			if (errno != 0)
@@ -68,10 +77,19 @@ main(int argc, char **argv)
 		return(0);
 	}
 
+	/* Configure log output */
 	utils_set_log_level(dbg_lvl);
 	utils_set_debug_mask(dbg_mask);
 	/* Prevent ffmpeg from spamming us, we report errors anyway */
 	av_log_set_level(AV_LOG_ERROR);
+
+	ret = sig_dispatcher_init(&sd);
+	if (ret < 0) {
+		utils_err(NONE, "Unable to initialize signal dispatcher\n");
+		ret = -1;
+		goto cleanup;
+	}
+	sig_dispatcher_start(&sd);
 
 	ret = sched_init(&sched, argv[optind]);
 	if (ret < 0) {
@@ -80,13 +98,15 @@ main(int argc, char **argv)
 		goto cleanup;
 	}
 
-	ret = meta_handler_init(&mh, port, NULL);
+	ret = mh_init(&mh, port, NULL, &sd);
 	if (ret < 0) {
 		utils_err(NONE, "Unable to initialize metadata request hanlder\n");
 		ret = -2;
 		goto cleanup;
 	}
+	mh_start(&mh);
 
+#if 0
 	ret = gst_player_init(&player, &sched, &mh, sink);
 	if (ret < 0) {
 		utils_err(NONE, "Unable to initialize player\n");
@@ -94,23 +114,27 @@ main(int argc, char **argv)
 		goto cleanup;
 	}
 
-	/* Install signal handler */
-	/* Install a signal handler for graceful exit */
-	sigemptyset(&sa.sa_mask);
-	sa.sa_flags = SA_SIGINFO;
-	sa.sa_sigaction = signal_handler;
-	sigaction(SIGQUIT, &sa, NULL);
-	sigaction(SIGTERM, &sa, NULL);
-	sigaction(SIGHUP, &sa, NULL);
-	sigaction(SIGINT, &sa, NULL);
-
+	/* This will spawn a g_main_loop and block */
 	gst_player_loop(&player);
+#endif
 
-	utils_info(PLR, "Graceful exit...\n");
+	ret = fsp_init(&fsp, &sched, &mh, &sd);
+	if (ret < 0) {
+		utils_err(NONE, "Unable to initialize player\n");
+		ret = -3;
+		goto cleanup;
+	}
+
+	/* This will spawn a pw_main_loop and block */
+	fsp_start(&fsp);
+
+	utils_info(NONE, "Graceful exit...\n");
 
  cleanup:
-	gst_player_cleanup(&player);
+	mh_cleanup(&mh);
+	fsp_cleanup(&fsp);
+//	gst_player_cleanup(&player);
 	sched_cleanup(&sched);
-	meta_handler_destroy(&mh);
+	sig_dispatcher_cleanup(&sd);
 	return ret;
 }
